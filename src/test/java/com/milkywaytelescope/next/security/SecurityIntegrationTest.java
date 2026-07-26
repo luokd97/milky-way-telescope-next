@@ -17,6 +17,7 @@ import com.milkywaytelescope.next.TelescopeNextApplication;
 import com.milkywaytelescope.next.connection.ConnectionProfile;
 import com.milkywaytelescope.next.settings.ApplicationConfig;
 import com.milkywaytelescope.next.settings.ApplicationConfigStore;
+import com.milkywaytelescope.next.settings.ConnectionSettings;
 import com.milkywaytelescope.next.settings.DashboardSettings;
 import com.milkywaytelescope.next.state.ConnectionRegistry;
 import java.util.List;
@@ -33,10 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
         "telescope.site-password=test-password",
-        "telescope.storage.connection-file=${java.io.tmpdir}/telescope-next-security-test.json",
-        "telescope.storage.control-file=${java.io.tmpdir}/telescope-next-security-control-test.json",
         "telescope.storage.settings-file=${java.io.tmpdir}/telescope-next-security-settings-test.json",
-        "telescope.wss.auto-connect=false"
 })
 class SecurityIntegrationTest {
     @Autowired
@@ -77,6 +75,58 @@ class SecurityIntegrationTest {
                         .with(user("owner").roles("OWNER"))
                         .with(csrf()))
                 .andExpect(status().isNotFound());
+
+        mockMvc.perform(post("/api/admin/connections/1/disconnect")
+                        .with(user("owner").roles("OWNER")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/connections/1/disconnect")
+                        .with(user("owner").roles("OWNER"))
+                        .with(csrf()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void disconnectPreservesProfileAndReconnectClearsDisabledState() throws Exception {
+        String characterId = "73001";
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=disconnect-secret&characterId=" + characterId,
+                "disconnect-token"
+        );
+        ApplicationConfig previous = configStore.current();
+        configStore.replace(new ApplicationConfig(
+                ApplicationConfig.CURRENT_SCHEMA_VERSION,
+                DashboardSettings.defaults(),
+                new ConnectionSettings(false, false, java.time.Duration.ofSeconds(1), java.time.Duration.ofHours(1)),
+                List.of(profile),
+                List.of(),
+                List.of()
+        ));
+        try {
+            mockMvc.perform(post("/api/admin/connections/" + characterId + "/disconnect")
+                            .with(user("owner").roles("OWNER"))
+                            .with(csrf()))
+                    .andExpect(status().isAccepted());
+
+            assertThat(configStore.current().connections()).extracting(ConnectionProfile::characterId)
+                    .containsExactly(characterId);
+            assertThat(configStore.current().disabledConnections()).containsExactly(characterId);
+            mockMvc.perform(get("/api/admin/connections")
+                            .with(user("owner").roles("OWNER")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$[0].status").value("disconnected"));
+
+            mockMvc.perform(post("/api/admin/connections/" + characterId + "/reconnect")
+                            .with(user("owner").roles("OWNER"))
+                            .with(csrf()))
+                    .andExpect(status().isAccepted());
+
+            assertThat(configStore.current().connections()).extracting(ConnectionProfile::characterId)
+                    .containsExactly(characterId);
+            assertThat(configStore.current().disabledConnections()).doesNotContain(characterId);
+        } finally {
+            configStore.replace(previous);
+        }
     }
 
     @Test
@@ -147,7 +197,7 @@ class SecurityIntegrationTest {
 
             mockMvc.perform(get("/api/admin/config").with(user("owner").roles("OWNER")))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.schemaVersion").value(1))
+                    .andExpect(jsonPath("$.schemaVersion").value(2))
                     .andExpect(jsonPath("$.connections[0].accessToken").value(accessToken))
                     .andExpect(jsonPath("$.connections[0].url").value(profile.url()));
 
@@ -169,7 +219,7 @@ class SecurityIntegrationTest {
     void protectsFullConfigReplacementWithCsrf() throws Exception {
         String configJson = """
                 {
-                  "schemaVersion": 1,
+                    "schemaVersion": 2,
                   "dashboard": {
                     "sectionOrder": [
                       "currentActivity",
@@ -179,7 +229,14 @@ class SecurityIntegrationTest {
                     ],
                     "inventoryWatchTerms": []
                   },
+                  "connectionSettings": {
+                    "autoConnect": false,
+                    "autoReconnect": false,
+                    "reconnectDelay": "PT30S",
+                    "takeoverYieldDuration": "PT2H"
+                  },
                   "connections": [],
+                  "disabledConnections": [],
                   "connectionControls": []
                 }
                 """;
@@ -196,7 +253,7 @@ class SecurityIntegrationTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(configJson))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.schemaVersion").value(1))
+                .andExpect(jsonPath("$.schemaVersion").value(2))
                 .andExpect(jsonPath("$.connections").isEmpty());
     }
 
@@ -205,7 +262,7 @@ class SecurityIntegrationTest {
         ApplicationConfig previous = configStore.current();
         String invalidConfigJson = """
                 {
-                  "schemaVersion": 1,
+                  "schemaVersion": 2,
                   "dashboard": {
                     "sectionOrder": [
                       "currentActivity",
@@ -215,11 +272,18 @@ class SecurityIntegrationTest {
                     ],
                     "inventoryWatchTerms": []
                   },
+                  "connectionSettings": {
+                    "autoConnect": false,
+                    "autoReconnect": false,
+                    "reconnectDelay": "PT30S",
+                    "takeoverYieldDuration": "PT2H"
+                  },
                   "connections": [{
                     "characterId": "42",
                     "url": "https://not-a-websocket.example/ws?characterId=42",
                     "accessToken": "sample-token"
                   }],
+                  "disabledConnections": [],
                   "connectionControls": []
                 }
                 """;

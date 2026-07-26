@@ -1,6 +1,8 @@
 package com.milkywaytelescope.next.connection;
 
-import com.milkywaytelescope.next.config.TelescopeProperties;
+import com.milkywaytelescope.next.settings.ApplicationConfig;
+import com.milkywaytelescope.next.settings.ApplicationConfigStore;
+import com.milkywaytelescope.next.settings.ConnectionSettings;
 import com.milkywaytelescope.next.state.CharacterSession;
 import com.milkywaytelescope.next.state.ConnectionRegistry;
 import jakarta.annotation.PostConstruct;
@@ -35,7 +37,7 @@ public class WssConnectionManager {
     private final ConnectionProfileStore profileStore;
     private final ConnectionControlStore controlStore;
     private final ConnectionRegistry registry;
-    private final TelescopeProperties properties;
+    private final ApplicationConfigStore configStore;
     private final HttpClient httpClient;
     private final ScheduledExecutorService scheduler;
     private final ConcurrentMap<String, ManagedConnection> connections = new ConcurrentHashMap<>();
@@ -44,12 +46,12 @@ public class WssConnectionManager {
             ConnectionProfileStore profileStore,
             ConnectionControlStore controlStore,
             ConnectionRegistry registry,
-            TelescopeProperties properties
+            ApplicationConfigStore configStore
     ) {
         this.profileStore = profileStore;
         this.controlStore = controlStore;
         this.registry = registry;
-        this.properties = properties;
+        this.configStore = configStore;
         this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
         this.scheduler = Executors.newScheduledThreadPool(4, runnable -> {
             Thread thread = new Thread(runnable, "telescope-wss");
@@ -60,10 +62,15 @@ public class WssConnectionManager {
 
     @PostConstruct
     void initialize() {
+        ApplicationConfig config = configStore.current();
         for (ConnectionProfile profile : profileStore.findAll()) {
             CharacterSession session = registry.getOrCreate(profile);
             ManagedConnection connection = connections.computeIfAbsent(profile.characterId(), ManagedConnection::new);
             connection.profile.set(profile);
+            if (config.disabledConnections().contains(profile.characterId())) {
+                connection.disable("manual disconnect");
+                continue;
+            }
             ConnectionControlState control = controlStore.find(profile.characterId());
             if (control != null && control.resumeAt().isAfter(Instant.now())) {
                 connection.restoreYield(control, session);
@@ -71,7 +78,7 @@ public class WssConnectionManager {
                 controlStore.delete(profile.characterId());
             }
         }
-        if (properties.getWss().isAutoConnect()) {
+        if (config.connectionSettings().autoConnect()) {
             profileStore.findAll().forEach(this::connect);
         }
     }
@@ -88,6 +95,9 @@ public class WssConnectionManager {
             List<ConnectionProfile> desiredProfiles,
             List<ConnectionControlState> desiredControls
     ) {
+        if (!configStore.current().connectionSettings().autoReconnect()) {
+            connections.values().forEach(ManagedConnection::cancelReconnect);
+        }
         Map<String, ConnectionProfile> profilesById = desiredProfiles.stream()
                 .collect(java.util.stream.Collectors.toMap(
                         ConnectionProfile::characterId,
@@ -112,7 +122,13 @@ public class WssConnectionManager {
                     ManagedConnection::new
             );
             ConnectionProfile previous = connection.profile.getAndSet(profile);
-            if (previous == null || !previous.equals(profile)) {
+            boolean disabled = configStore.current().disabledConnections().contains(characterId);
+            if (disabled) {
+                registry.getOrCreate(profile);
+                connection.disable("manual disconnect");
+                return;
+            }
+            if (previous == null || !previous.equals(profile) || connection.isDisconnected()) {
                 connection.reconnect(profile);
             }
 
@@ -139,7 +155,30 @@ public class WssConnectionManager {
         if (profile == null) {
             return false;
         }
+        configStore.update(current -> current.withDisabledConnections(current.disabledConnections().stream()
+                .filter(disabledCharacterId -> !disabledCharacterId.equals(characterId))
+                .toList()));
         connections.computeIfAbsent(characterId, ManagedConnection::new).resumeAndReconnect(profile);
+        return true;
+    }
+
+    public boolean disconnect(String characterId) {
+        ConnectionProfile profile = profileStore.find(characterId);
+        if (profile == null) {
+            return false;
+        }
+        configStore.update(current -> current
+                .withDisabledConnections(addDisabledConnection(current.disabledConnections(), characterId))
+                .withConnectionControls(current.connectionControls().stream()
+                        .filter(control -> !control.characterId().equals(characterId))
+                        .toList()));
+        ManagedConnection connection = connections.computeIfAbsent(
+                characterId,
+                ManagedConnection::new
+        );
+        connection.profile.set(profile);
+        registry.getOrCreate(profile);
+        connection.disable("manual disconnect");
         return true;
     }
 
@@ -152,7 +191,7 @@ public class WssConnectionManager {
     public void remove(String characterId) {
         ManagedConnection connection = connections.remove(characterId);
         if (connection != null) {
-            connection.close("configuration removed");
+            connection.disable("configuration removed");
         }
         controlStore.delete(characterId);
         registry.remove(characterId);
@@ -168,6 +207,13 @@ public class WssConnectionManager {
 
     private void connect(ConnectionProfile profile) {
         connections.computeIfAbsent(profile.characterId(), ManagedConnection::new).connect(profile);
+    }
+
+    private static List<String> addDisabledConnection(List<String> current, String characterId) {
+        if (current.contains(characterId)) {
+            return current;
+        }
+        return java.util.stream.Stream.concat(current.stream(), java.util.stream.Stream.of(characterId)).toList();
     }
 
     private final class ManagedConnection {
@@ -222,6 +268,13 @@ public class WssConnectionManager {
                             }
                             return;
                         }
+                        if (!isRunning()) {
+                            if (webSocket != null) {
+                                socket.compareAndSet(webSocket, null);
+                                webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "connection no longer desired");
+                            }
+                            return;
+                        }
                         if (failure != null) {
                             session.markError(connectingGeneration, failure);
                             log.warn("WSS connection failed for character {}", characterId);
@@ -257,12 +310,13 @@ public class WssConnectionManager {
         }
 
         private synchronized void scheduleReconnect() {
-            if (!properties.getWss().isAutoReconnect()
+            ConnectionSettings settings = configStore.current().connectionSettings();
+            if (!settings.autoReconnect()
                     || desiredState != DesiredState.RUNNING
                     || pendingReconnect != null) {
                 return;
             }
-            long delayMillis = Math.max(1, properties.getWss().getReconnectDelay().toMillis());
+            long delayMillis = Math.max(1, settings.reconnectDelay().toMillis());
             pendingReconnect = scheduler.schedule(() -> {
                 synchronized (ManagedConnection.this) {
                     pendingReconnect = null;
@@ -290,8 +344,28 @@ public class WssConnectionManager {
             close("configuration yielded");
         }
 
+        private synchronized void disable(String reason) {
+            desiredState = DesiredState.DISCONNECTED;
+            resumeAt = null;
+            cancelPendingReconnect();
+            cancelPendingResume();
+            close(reason);
+            CharacterSession session = registry.get(characterId);
+            if (session != null) {
+                session.markDisconnected(generation, reason);
+            }
+        }
+
         private synchronized boolean isYielded() {
             return desiredState == DesiredState.YIELDED;
+        }
+
+        private synchronized boolean isDisconnected() {
+            return desiredState == DesiredState.DISCONNECTED;
+        }
+
+        private synchronized boolean isRunning() {
+            return desiredState == DesiredState.RUNNING;
         }
 
         private synchronized void yieldToRemoteSession(long expectedGeneration, String reason) {
@@ -299,7 +373,9 @@ public class WssConnectionManager {
                 return;
             }
             Instant yieldedAt = Instant.now();
-            Instant nextResumeAt = yieldedAt.plus(properties.getWss().getTakeoverYieldDuration());
+            Instant nextResumeAt = yieldedAt.plus(
+                    configStore.current().connectionSettings().takeoverYieldDuration()
+            );
             ConnectionControlState control = new ConnectionControlState(
                     characterId,
                     yieldedAt,
@@ -330,7 +406,9 @@ public class WssConnectionManager {
                 return false;
             }
             Instant yieldedAt = Instant.now();
-            Instant nextResumeAt = yieldedAt.plus(properties.getWss().getTakeoverYieldDuration());
+            Instant nextResumeAt = yieldedAt.plus(
+                    configStore.current().connectionSettings().takeoverYieldDuration()
+            );
             ConnectionControlState control = new ConnectionControlState(
                     characterId,
                     yieldedAt,
@@ -395,6 +473,10 @@ public class WssConnectionManager {
                 pendingReconnect.cancel(false);
                 pendingReconnect = null;
             }
+        }
+
+        private synchronized void cancelReconnect() {
+            cancelPendingReconnect();
         }
 
         private synchronized void cancelPendingResume() {
@@ -504,6 +586,7 @@ public class WssConnectionManager {
 
     private enum DesiredState {
         RUNNING,
-        YIELDED
+        YIELDED,
+        DISCONNECTED
     }
 }

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milkywaytelescope.next.config.TelescopeProperties;
 import com.milkywaytelescope.next.settings.ApplicationConfigStore;
 import java.nio.file.Path;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -17,8 +18,6 @@ class ConnectionProfileStoreTest {
     void persistsAndReloadsProfiles() {
         TelescopeProperties properties = new TelescopeProperties();
         properties.getStorage().setSettingsFile(tempDir.resolve("settings.json"));
-        properties.getStorage().setConnectionFile(tempDir.resolve("connections.json"));
-        properties.getStorage().setControlFile(tempDir.resolve("connection-control.json"));
 
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         ApplicationConfigStore configStore = new ApplicationConfigStore(objectMapper, properties);
@@ -35,5 +34,9 @@ class ConnectionProfileStoreTest {
 
         assertThat(reloaded.findAll()).hasSize(1);
         assertThat(reloaded.find("42").redactedUrl()).contains("hash=<redacted>");
+
+        reloadedConfig.update(current -> current.withDisabledConnections(List.of("42")));
+        assertThat(reloaded.delete("42")).isNotNull();
+        assertThat(reloadedConfig.current().disabledConnections()).isEmpty();
     }
 }

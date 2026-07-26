@@ -82,6 +82,14 @@ public class AdminConnectionController {
         return ResponseEntity.accepted().build();
     }
 
+    @PostMapping("/{characterId}/disconnect")
+    public ResponseEntity<Void> disconnect(@PathVariable String characterId) {
+        if (!connectionManager.disconnect(characterId)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Connection not found");
+        }
+        return ResponseEntity.accepted().build();
+    }
+
     @PostMapping("/{characterId}/yield/extend")
     public ResponseEntity<Void> extendYield(@PathVariable String characterId) {
         if (profileStore.find(characterId) == null) {

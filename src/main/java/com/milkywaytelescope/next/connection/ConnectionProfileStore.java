@@ -62,6 +62,9 @@ public class ConnectionProfileStore {
                 .withConnections(current.connections().stream()
                         .filter(profile -> !profile.characterId().equals(characterId))
                         .toList())
+                .withDisabledConnections(current.disabledConnections().stream()
+                        .filter(disabledCharacterId -> !disabledCharacterId.equals(characterId))
+                        .toList())
                 .withConnectionControls(current.connectionControls().stream()
                         .filter(control -> !control.characterId().equals(characterId))
                         .toList()));

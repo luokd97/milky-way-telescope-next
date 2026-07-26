@@ -24,8 +24,6 @@ management:
 telescope:
   site-password: ${MONITOR_SITE_PASSWORD:}
   storage:
-    connection-file: ${TELESCOPE_CONNECTION_FILE:data/connections.json}
-    control-file: ${TELESCOPE_CONTROL_FILE:data/connection-control.json}
     settings-file: ${TELESCOPE_SETTINGS_FILE:data/settings.json}
   message:
     recent-limit: 100
@@ -34,8 +32,3 @@ telescope:
     recent-event-limit: ${TELESCOPE_RECENT_EVENT_LIMIT:50}
   inventory:
     highlight-limit: ${TELESCOPE_INVENTORY_HIGHLIGHT_LIMIT:12}
-  wss:
-    auto-connect: ${TELESCOPE_AUTO_CONNECT:false}
-    auto-reconnect: true
-    reconnect-delay: 30s
-    takeover-yield-duration: ${TELESCOPE_WSS_TAKEOVER_YIELD_DURATION:2h}

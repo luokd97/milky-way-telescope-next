@@ -1,7 +1,6 @@
 package com.milkywaytelescope.next.config;
 
 import java.nio.file.Path;
-import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "telescope")
@@ -11,7 +10,6 @@ public class TelescopeProperties {
     private final Message message = new Message();
     private final State state = new State();
     private final Inventory inventory = new Inventory();
-    private final Wss wss = new Wss();
 
     public String getSitePassword() {
         return sitePassword;
@@ -37,30 +35,8 @@ public class TelescopeProperties {
         return inventory;
     }
 
-    public Wss getWss() {
-        return wss;
-    }
-
     public static class Storage {
-        private Path connectionFile = Path.of("data/connections.json");
-        private Path controlFile = Path.of("data/connection-control.json");
         private Path settingsFile = Path.of("data/settings.json");
-
-        public Path getConnectionFile() {
-            return connectionFile;
-        }
-
-        public void setConnectionFile(Path connectionFile) {
-            this.connectionFile = connectionFile;
-        }
-
-        public Path getControlFile() {
-            return controlFile;
-        }
-
-        public void setControlFile(Path controlFile) {
-            this.controlFile = controlFile;
-        }
 
         public Path getSettingsFile() {
             return settingsFile;
@@ -116,47 +92,4 @@ public class TelescopeProperties {
         }
     }
 
-    public static class Wss {
-        private boolean autoConnect;
-        private boolean autoReconnect = true;
-        private Duration reconnectDelay = Duration.ofSeconds(30);
-        private Duration takeoverYieldDuration = Duration.ofHours(2);
-
-        public boolean isAutoConnect() {
-            return autoConnect;
-        }
-
-        public void setAutoConnect(boolean autoConnect) {
-            this.autoConnect = autoConnect;
-        }
-
-        public boolean isAutoReconnect() {
-            return autoReconnect;
-        }
-
-        public void setAutoReconnect(boolean autoReconnect) {
-            this.autoReconnect = autoReconnect;
-        }
-
-        public Duration getReconnectDelay() {
-            return reconnectDelay;
-        }
-
-        public void setReconnectDelay(Duration reconnectDelay) {
-            this.reconnectDelay = reconnectDelay;
-        }
-
-        public Duration getTakeoverYieldDuration() {
-            return takeoverYieldDuration;
-        }
-
-        public void setTakeoverYieldDuration(Duration takeoverYieldDuration) {
-            if (takeoverYieldDuration == null
-                    || takeoverYieldDuration.isZero()
-                    || takeoverYieldDuration.isNegative()) {
-                throw new IllegalArgumentException("takeoverYieldDuration must be positive");
-            }
-            this.takeoverYieldDuration = takeoverYieldDuration;
-        }
-    }
 }

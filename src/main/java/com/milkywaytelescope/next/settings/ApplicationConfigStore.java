@@ -1,10 +1,7 @@
 package com.milkywaytelescope.next.settings;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.milkywaytelescope.next.connection.ConnectionControlState;
-import com.milkywaytelescope.next.connection.ConnectionProfile;
 import com.milkywaytelescope.next.config.TelescopeProperties;
 import jakarta.annotation.PostConstruct;
 import java.io.IOException;
@@ -13,26 +10,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermissions;
-import java.util.List;
 import java.util.function.UnaryOperator;
 import org.springframework.stereotype.Component;
 
 @Component
 public class ApplicationConfigStore {
-    private static final TypeReference<List<ConnectionProfile>> PROFILE_LIST = new TypeReference<>() {};
-    private static final TypeReference<List<ConnectionControlState>> CONTROL_LIST = new TypeReference<>() {};
-
     private final ObjectMapper objectMapper;
     private final Path file;
-    private final Path legacyConnectionFile;
-    private final Path legacyControlFile;
     private ApplicationConfig config = ApplicationConfig.defaults();
 
     public ApplicationConfigStore(ObjectMapper objectMapper, TelescopeProperties properties) {
         this.objectMapper = objectMapper;
         this.file = properties.getStorage().getSettingsFile().toAbsolutePath().normalize();
-        this.legacyConnectionFile = properties.getStorage().getConnectionFile().toAbsolutePath().normalize();
-        this.legacyControlFile = properties.getStorage().getControlFile().toAbsolutePath().normalize();
     }
 
     @PostConstruct
@@ -43,16 +32,11 @@ public class ApplicationConfigStore {
                 if (root == null || root.isNull()) {
                     throw new IllegalArgumentException("Application config file cannot be null");
                 }
-                if (root.has("schemaVersion")) {
-                    config = objectMapper.treeToValue(root, ApplicationConfig.class);
-                    return;
+                ApplicationConfig loaded = readConfig(root);
+                config = loaded;
+                if (root.path("schemaVersion").asInt() != ApplicationConfig.CURRENT_SCHEMA_VERSION) {
+                    persist();
                 }
-                migrate(root);
-                return;
-            }
-
-            if (Files.exists(legacyConnectionFile) || Files.exists(legacyControlFile)) {
-                migrate(null);
             }
         } catch (IOException | IllegalArgumentException exception) {
             throw new IllegalStateException("Unable to load application config", exception);
@@ -70,7 +54,9 @@ public class ApplicationConfigStore {
         ApplicationConfig validated = new ApplicationConfig(
                 next.schemaVersion(),
                 next.dashboard(),
+                next.connectionSettings(),
                 next.connections(),
+                next.disabledConnections(),
                 next.connectionControls()
         );
         ApplicationConfig previous = config;
@@ -91,38 +77,36 @@ public class ApplicationConfigStore {
         return replace(updater.apply(config));
     }
 
-    private void migrate(JsonNode legacySettingsRoot) throws IOException {
-        DashboardSettings dashboard = legacySettingsRoot == null
-                ? DashboardSettings.defaults()
-                : objectMapper.treeToValue(legacySettingsRoot, DashboardSettings.class);
-        List<ConnectionProfile> connections = readLegacyList(legacyConnectionFile, PROFILE_LIST);
-        List<ConnectionControlState> controls = readLegacyList(legacyControlFile, CONTROL_LIST);
-        ApplicationConfig migrated = new ApplicationConfig(dashboard, connections, controls);
-
-        backupIfPresent(file);
-        backupIfPresent(legacyConnectionFile);
-        backupIfPresent(legacyControlFile);
-        config = migrated;
-        persist();
-    }
-
-    private <T> List<T> readLegacyList(Path source, TypeReference<List<T>> type) throws IOException {
-        if (!Files.exists(source)) {
-            return List.of();
+    private ApplicationConfig readConfig(JsonNode root) throws IOException {
+        if (!root.isObject()) {
+            throw new IllegalArgumentException("Application config must be a JSON object");
         }
-        List<T> values = objectMapper.readValue(source.toFile(), type);
-        return values == null ? List.of() : values;
-    }
-
-    private void backupIfPresent(Path source) throws IOException {
-        if (!Files.exists(source)) {
-            return;
+        int schemaVersion = root.path("schemaVersion").asInt(-1);
+        if (schemaVersion == -1 && root.has("sectionOrder")) {
+            com.fasterxml.jackson.databind.node.ObjectNode upgraded = objectMapper.createObjectNode();
+            upgraded.put("schemaVersion", ApplicationConfig.CURRENT_SCHEMA_VERSION);
+            upgraded.set("dashboard", root);
+            upgraded.set("connectionSettings", objectMapper.valueToTree(ConnectionSettings.defaults()));
+            upgraded.putArray("connections");
+            upgraded.putArray("disabledConnections");
+            upgraded.putArray("connectionControls");
+            return objectMapper.treeToValue(upgraded, ApplicationConfig.class);
         }
-        Path backup = source.resolveSibling(source.getFileName() + ".pre-unified.bak");
-        if (!Files.exists(backup)) {
-            Files.copy(source, backup, StandardCopyOption.COPY_ATTRIBUTES);
-            restrictPermissions(backup);
+        if (schemaVersion == 1) {
+            com.fasterxml.jackson.databind.node.ObjectNode upgraded = root.deepCopy();
+            upgraded.put("schemaVersion", ApplicationConfig.CURRENT_SCHEMA_VERSION);
+            if (!upgraded.has("connectionSettings")) {
+                upgraded.set("connectionSettings", objectMapper.valueToTree(ConnectionSettings.defaults()));
+            }
+            if (!upgraded.has("disabledConnections")) {
+                upgraded.putArray("disabledConnections");
+            }
+            return objectMapper.treeToValue(upgraded, ApplicationConfig.class);
         }
+        if (schemaVersion != ApplicationConfig.CURRENT_SCHEMA_VERSION) {
+            throw new IllegalArgumentException("Unsupported application config schemaVersion: " + schemaVersion);
+        }
+        return objectMapper.treeToValue(root, ApplicationConfig.class);
     }
 
     private void persist() {

@@ -120,6 +120,20 @@ public final class CharacterSession {
         closeReason = blankToNull(reason);
     }
 
+    public synchronized void markDisconnected(long expectedGeneration, String reason) {
+        if (expectedGeneration != generation) {
+            return;
+        }
+        status = "disconnected";
+        closedAt = Instant.now();
+        closeCode = 1000;
+        closeReason = blankToNull(reason);
+        error = null;
+        yieldedAt = null;
+        resumeAt = null;
+        yieldReason = null;
+    }
+
     public synchronized void markError(long expectedGeneration, Throwable throwable) {
         if (expectedGeneration != generation) {
             return;

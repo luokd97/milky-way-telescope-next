@@ -123,6 +123,24 @@ class CharacterSessionTest {
     }
 
     @Test
+    void marksManualDisconnectWithoutDroppingTheSession() {
+        CharacterSession session = new CharacterSession("7", new ObjectMapper(), 100, 4096);
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=7",
+                "sample-token"
+        );
+        long generation = session.beginGeneration(profile);
+        session.markConnected(generation);
+
+        session.markDisconnected(generation, "manual disconnect");
+
+        var connection = session.snapshot(0, false).connection();
+        assertThat(connection.status()).isEqualTo("disconnected");
+        assertThat(connection.closeCode()).isEqualTo(1000);
+        assertThat(connection.closeReason()).isEqualTo("manual disconnect");
+    }
+
+    @Test
     void retainsProjectedStateAcrossReconnectsAndMarksItsFreshness() {
         CharacterSession session = new CharacterSession("7", new ObjectMapper(), 100, 4096);
         ConnectionProfile profile = ConnectionProfile.from(

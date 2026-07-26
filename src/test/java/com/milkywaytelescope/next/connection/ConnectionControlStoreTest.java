@@ -18,8 +18,6 @@ class ConnectionControlStoreTest {
     void persistsYieldAcrossApplicationRestartsAndCanClearIt() {
         TelescopeProperties properties = new TelescopeProperties();
         properties.getStorage().setSettingsFile(tempDir.resolve("settings.json"));
-        properties.getStorage().setConnectionFile(tempDir.resolve("connections.json"));
-        properties.getStorage().setControlFile(tempDir.resolve("connection-control.json"));
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         ConnectionControlState state = new ConnectionControlState(
                 "42",

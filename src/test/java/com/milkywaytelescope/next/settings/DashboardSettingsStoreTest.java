@@ -18,8 +18,6 @@ class DashboardSettingsStoreTest {
     void usesDefaultOrderAndPersistsGlobalOrder() {
         TelescopeProperties properties = new TelescopeProperties();
         properties.getStorage().setSettingsFile(tempDir.resolve("settings.json"));
-        properties.getStorage().setConnectionFile(tempDir.resolve("connections.json"));
-        properties.getStorage().setControlFile(tempDir.resolve("connection-control.json"));
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         ApplicationConfigStore configStore = new ApplicationConfigStore(objectMapper, properties);
         configStore.load();
@@ -54,8 +52,6 @@ class DashboardSettingsStoreTest {
         TelescopeProperties properties = new TelescopeProperties();
         Path settingsFile = tempDir.resolve("legacy-settings.json");
         properties.getStorage().setSettingsFile(settingsFile);
-        properties.getStorage().setConnectionFile(tempDir.resolve("connections.json"));
-        properties.getStorage().setControlFile(tempDir.resolve("connection-control.json"));
         java.nio.file.Files.writeString(settingsFile, """
                 {
                   "sectionOrder": [
@@ -79,8 +75,6 @@ class DashboardSettingsStoreTest {
     void rejectsIncompleteDuplicateAndUnknownSectionsWithoutChangingCurrentOrder() {
         TelescopeProperties properties = new TelescopeProperties();
         properties.getStorage().setSettingsFile(tempDir.resolve("settings.json"));
-        properties.getStorage().setConnectionFile(tempDir.resolve("connections.json"));
-        properties.getStorage().setControlFile(tempDir.resolve("connection-control.json"));
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         ApplicationConfigStore configStore = new ApplicationConfigStore(objectMapper, properties);
         configStore.load();

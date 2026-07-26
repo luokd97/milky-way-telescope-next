@@ -36,7 +36,7 @@ complete configuration. A typical file looks like:
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "dashboard": {
     "sectionOrder": [
       "currentActivity",
@@ -46,6 +46,12 @@ complete configuration. A typical file looks like:
     ],
     "inventoryWatchTerms": ["wisdom_tea", "coin"]
   },
+  "connectionSettings": {
+    "autoConnect": false,
+    "autoReconnect": true,
+    "reconnectDelay": "PT30S",
+    "takeoverYieldDuration": "PT2H"
+  },
   "connections": [
     {
       "characterId": "<character-id>",
@@ -53,6 +59,7 @@ complete configuration. A typical file looks like:
       "accessToken": "<access-token>"
     }
   ],
+  "disabledConnections": [],
   "connectionControls": []
 }
 ```
@@ -65,6 +72,9 @@ message, cancels automatic reconnects, and yields that character for two hours. 
 is persisted in the unified configuration, survives application restarts, and can be resumed or extended from the
 runtime controls in Settings.
 
+Disconnecting a character from Settings closes only its current WebSocket and keeps its profile. The profile can be
+reconnected later. Removing a profile from the configuration permanently deletes its connection credentials.
+
 ## Configuration
 
 | Environment variable | Default | Purpose |
@@ -74,10 +84,6 @@ runtime controls in Settings.
 | `SERVER_PORT` | `8081` | HTTP port |
 | `SESSION_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
 | `TELESCOPE_SETTINGS_FILE` | `data/settings.json` | Unified Dashboard, connection, and connection-control configuration |
-| `TELESCOPE_CONNECTION_FILE` | `data/connections.json` | Legacy profile path used only during migration |
-| `TELESCOPE_CONTROL_FILE` | `data/connection-control.json` | Legacy takeover-yield path used only during migration |
-| `TELESCOPE_AUTO_CONNECT` | `false` | Connect stored profiles during startup |
-| `TELESCOPE_WSS_TAKEOVER_YIELD_DURATION` | `2h` | Delay before automatically resuming after another game session takes over |
 | `TELESCOPE_RECENT_EVENT_LIMIT` | `50` | Maximum low-inventory alerts retained per character |
 | `TELESCOPE_INVENTORY_HIGHLIGHT_LIMIT` | `12` | Maximum inventory highlights shown per character |
 
@@ -131,10 +137,6 @@ sha256sum --check telescope-next.jar.sha256
 ```
 
 Run the service as a dedicated unprivileged user, bind it to `127.0.0.1:8081`, and expose it through an HTTPS reverse proxy. Keep `MONITOR_SITE_PASSWORD` in the systemd environment file and point `TELESCOPE_SETTINGS_FILE` at `/var/lib/telescope-next/settings.json`.
-
-On first startup with legacy files, the application merges the old settings, profile, and control files into the
-unified file. It keeps each source as a `.pre-unified.bak` backup and does not delete the originals. After checking
-the migrated file, remove the legacy environment variables and files when convenient.
 
 The `deploy/` directory contains a systemd unit, environment template, and release installer. On Debian, run the installer as root with an explicit tag:
 

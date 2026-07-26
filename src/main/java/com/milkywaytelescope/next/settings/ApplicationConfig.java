@@ -3,24 +3,31 @@ package com.milkywaytelescope.next.settings;
 import com.milkywaytelescope.next.connection.ConnectionControlState;
 import com.milkywaytelescope.next.connection.ConnectionProfile;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 
 public record ApplicationConfig(
         int schemaVersion,
         DashboardSettings dashboard,
+        ConnectionSettings connectionSettings,
         List<ConnectionProfile> connections,
+        List<String> disabledConnections,
         List<ConnectionControlState> connectionControls
 ) {
-    public static final int CURRENT_SCHEMA_VERSION = 1;
+    public static final int CURRENT_SCHEMA_VERSION = 2;
 
     public ApplicationConfig {
         if (schemaVersion != CURRENT_SCHEMA_VERSION) {
             throw new IllegalArgumentException("Unsupported application config schemaVersion: " + schemaVersion);
         }
         dashboard = dashboard == null ? DashboardSettings.defaults() : dashboard;
+        connectionSettings = connectionSettings == null
+                ? ConnectionSettings.defaults()
+                : connectionSettings;
         connections = normalizeConnections(connections);
+        disabledConnections = normalizeDisabledConnections(disabledConnections);
         connectionControls = normalizeConnectionControls(connectionControls);
     }
 
@@ -29,23 +36,80 @@ public record ApplicationConfig(
             List<ConnectionProfile> connections,
             List<ConnectionControlState> connectionControls
     ) {
-        this(CURRENT_SCHEMA_VERSION, dashboard, connections, connectionControls);
+        this(
+                CURRENT_SCHEMA_VERSION,
+                dashboard,
+                ConnectionSettings.defaults(),
+                connections,
+                List.of(),
+                connectionControls
+        );
     }
 
     public static ApplicationConfig defaults() {
-        return new ApplicationConfig(DashboardSettings.defaults(), List.of(), List.of());
+        return new ApplicationConfig(
+                CURRENT_SCHEMA_VERSION,
+                DashboardSettings.defaults(),
+                ConnectionSettings.defaults(),
+                List.of(),
+                List.of(),
+                List.of()
+        );
     }
 
     public ApplicationConfig withDashboard(DashboardSettings nextDashboard) {
-        return new ApplicationConfig(schemaVersion, nextDashboard, connections, connectionControls);
+        return new ApplicationConfig(
+                schemaVersion,
+                nextDashboard,
+                connectionSettings,
+                connections,
+                disabledConnections,
+                connectionControls
+        );
+    }
+
+    public ApplicationConfig withConnectionSettings(ConnectionSettings nextConnectionSettings) {
+        return new ApplicationConfig(
+                schemaVersion,
+                dashboard,
+                nextConnectionSettings,
+                connections,
+                disabledConnections,
+                connectionControls
+        );
     }
 
     public ApplicationConfig withConnections(List<ConnectionProfile> nextConnections) {
-        return new ApplicationConfig(schemaVersion, dashboard, nextConnections, connectionControls);
+        return new ApplicationConfig(
+                schemaVersion,
+                dashboard,
+                connectionSettings,
+                nextConnections,
+                disabledConnections,
+                connectionControls
+        );
+    }
+
+    public ApplicationConfig withDisabledConnections(List<String> nextDisabledConnections) {
+        return new ApplicationConfig(
+                schemaVersion,
+                dashboard,
+                connectionSettings,
+                connections,
+                nextDisabledConnections,
+                connectionControls
+        );
     }
 
     public ApplicationConfig withConnectionControls(List<ConnectionControlState> nextControls) {
-        return new ApplicationConfig(schemaVersion, dashboard, connections, nextControls);
+        return new ApplicationConfig(
+                schemaVersion,
+                dashboard,
+                connectionSettings,
+                connections,
+                disabledConnections,
+                nextControls
+        );
     }
 
     private static List<ConnectionProfile> normalizeConnections(List<ConnectionProfile> values) {
@@ -53,7 +117,7 @@ public record ApplicationConfig(
             return List.of();
         }
         List<ConnectionProfile> normalized = new ArrayList<>();
-        HashSet<String> characterIds = new HashSet<>();
+        Set<String> characterIds = new LinkedHashSet<>();
         for (ConnectionProfile profile : values) {
             if (profile == null) {
                 throw new IllegalArgumentException("connections cannot contain null entries");
@@ -72,6 +136,20 @@ public record ApplicationConfig(
         return List.copyOf(normalized);
     }
 
+    private static List<String> normalizeDisabledConnections(List<String> values) {
+        if (values == null) {
+            return List.of();
+        }
+        Set<String> unique = new LinkedHashSet<>();
+        for (String characterId : values) {
+            if (characterId == null || characterId.isBlank()) {
+                throw new IllegalArgumentException("disabledConnections cannot contain blank characterIds");
+            }
+            unique.add(characterId.trim());
+        }
+        return List.copyOf(unique);
+    }
+
     private static List<ConnectionControlState> normalizeConnectionControls(
             List<ConnectionControlState> values
     ) {
@@ -79,7 +157,7 @@ public record ApplicationConfig(
             return List.of();
         }
         List<ConnectionControlState> normalized = new ArrayList<>();
-        HashSet<String> characterIds = new HashSet<>();
+        Set<String> characterIds = new LinkedHashSet<>();
         for (ConnectionControlState control : values) {
             if (control == null) {
                 throw new IllegalArgumentException("connectionControls cannot contain null entries");

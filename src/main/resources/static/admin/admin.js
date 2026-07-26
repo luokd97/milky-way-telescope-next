@@ -98,6 +98,7 @@ async function refreshConnections() {
 }
 
 function connectionRow(connection) {
+  const canDisconnect = connection.status === "connected" || connection.status === "connecting";
   return `
     <article class="connection-row">
       <div>
@@ -107,7 +108,6 @@ function connectionRow(connection) {
             ${escapeHtml(connection.status)}
           </span>
         </div>
-        <code>${escapeHtml(connection.redactedUrl)}</code>
         ${connection.error ? `<p class="notice error">${escapeHtml(connection.error)}</p>` : ""}
         ${connection.status === "yielded" ? `
           <p class="notice">
@@ -117,9 +117,13 @@ function connectionRow(connection) {
           </p>` : ""}
       </div>
       <div class="button-row">
-        <button class="button-secondary" data-action="reconnect" data-id="${escapeHtml(connection.characterId)}">
-          ${connection.status === "yielded" ? "Resume now" : "Reconnect"}
-        </button>
+        ${canDisconnect ? `
+          <button class="button-danger" data-action="disconnect" data-id="${escapeHtml(connection.characterId)}">
+            Disconnect
+          </button>` : `
+          <button class="button-secondary" data-action="reconnect" data-id="${escapeHtml(connection.characterId)}">
+            ${connection.status === "yielded" ? "Resume now" : "Reconnect"}
+          </button>`}
         ${connection.status === "yielded" ? `
           <button class="button-secondary" data-action="extend-yield" data-id="${escapeHtml(connection.characterId)}">
             Extend yield
@@ -134,7 +138,14 @@ async function handleRuntimeAction(event) {
   const id = button.dataset.id;
   const action = button.dataset.action;
   try {
-    if (action === "reconnect") {
+    if (action === "disconnect") {
+      if (!window.confirm(
+        `Disconnect Character ${id}? The connection configuration will be kept and can be reconnected later.`
+      )) {
+        return;
+      }
+      await mutate(`/api/admin/connections/${encodeURIComponent(id)}/disconnect`, "POST");
+    } else if (action === "reconnect") {
       await mutate(`/api/admin/connections/${encodeURIComponent(id)}/reconnect`, "POST");
     } else if (action === "extend-yield") {
       await mutate(`/api/admin/connections/${encodeURIComponent(id)}/yield/extend`, "POST");
