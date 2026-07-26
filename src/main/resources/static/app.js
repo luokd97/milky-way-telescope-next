@@ -184,8 +184,9 @@ function emptyStateCard() {
 function createCharacterCard() {
   const card = document.createElement("article");
   card.className = "character-card";
+  card.dataset.detailsExpanded = "false";
   card.innerHTML = `
-    <div class="character-card-intro">
+    <div class="character-card-intro" data-card-summary="true">
       <header class="character-card-header">
         <div class="character-identity">
           <div class="character-name-line">
@@ -199,6 +200,9 @@ function createCharacterCard() {
         </div>
         <div class="status-stack">
           <span class="status" data-field="character-status"></span>
+          <button class="card-details-toggle" type="button"
+              data-field="details-toggle" data-card-action="toggle-card-details"
+              aria-expanded="false"></button>
         </div>
       </header>
       <div data-field="notices"></div>
@@ -274,8 +278,16 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   const field = name => card.querySelector(`[data-field="${name}"]`);
 
   card.dataset.characterId = id;
+  const detailsId = `character-card-details-${String(id).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const detailsRoot = card.querySelector(".card-sections");
+  detailsRoot.id = detailsId;
+  if (card.dataset.detailsExpanded !== "true") {
+    card.dataset.detailsExpanded = "false";
+  }
+  const characterName = character.name || "Waiting for character data";
   setElementText(field("character-id"), `#${connection.characterId || id}`);
-  setElementText(field("character-name"), character.name || "Waiting for character data");
+  setElementText(field("character-name"), characterName);
+  updateCardDetailsToggle(card, detailsId, characterName);
   const mode = modeLabel(character.gameMode);
   const modeElement = field("character-mode");
   setElementText(modeElement, mode);
@@ -333,16 +345,64 @@ function normalizeSectionOrder(order) {
 
 function handleCardAction(event) {
   const button = event.target.closest("button[data-card-action]");
-  if (!button || button.dataset.cardAction !== "toggle-action-queue") return;
-  const card = button.closest(".character-card");
-  if (!card) return;
+  if (button) {
+    const card = button.closest(".character-card");
+    if (!card) return;
 
-  const expanded = card.dataset.actionQueueExpanded === "true";
-  card.dataset.actionQueueExpanded = String(!expanded);
-  const characters = state.dashboard?.characters || [];
-  const snapshot = characters.find((candidate, index) =>
-    characterId(candidate, index) === card.dataset.characterId);
-  updateActionQueue(card, snapshot?.actionQueue || []);
+    if (button.dataset.cardAction === "toggle-card-details") {
+      toggleCardDetails(card);
+      return;
+    }
+    if (button.dataset.cardAction !== "toggle-action-queue") return;
+
+    const expanded = card.dataset.actionQueueExpanded === "true";
+    card.dataset.actionQueueExpanded = String(!expanded);
+    const characters = state.dashboard?.characters || [];
+    const snapshot = characters.find((candidate, index) =>
+      characterId(candidate, index) === card.dataset.characterId);
+    updateActionQueue(card, snapshot?.actionQueue || []);
+    return;
+  }
+
+  const summary = event.target.closest("[data-card-summary]");
+  const card = summary?.closest(".character-card");
+  if (!card || !isMobileViewport()) return;
+  toggleCardDetails(card);
+}
+
+function toggleCardDetails(card) {
+  setCardDetailsExpanded(card, card.dataset.detailsExpanded !== "true");
+}
+
+function setCardDetailsExpanded(card, expanded) {
+  card.dataset.detailsExpanded = String(expanded);
+  const toggle = card.querySelector("[data-field='details-toggle']");
+  if (!toggle) return;
+
+  const name = card.querySelector("[data-field='character-name']")?.textContent || "character";
+  setElementText(toggle, expanded ? "Show less" : "More details");
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.setAttribute(
+    "aria-label",
+    expanded ? `Collapse ${name} details` : `Show more ${name} details`,
+  );
+}
+
+function updateCardDetailsToggle(card, detailsId, characterName) {
+  const toggle = card.querySelector("[data-field='details-toggle']");
+  if (!toggle) return;
+  const expanded = card.dataset.detailsExpanded === "true";
+  toggle.setAttribute("aria-controls", detailsId);
+  setElementText(toggle, expanded ? "Show less" : "More details");
+  toggle.setAttribute("aria-expanded", String(expanded));
+  toggle.setAttribute(
+    "aria-label",
+    expanded ? `Collapse ${characterName} details` : `Show more ${characterName} details`,
+  );
+}
+
+function isMobileViewport() {
+  return window.matchMedia?.("(max-width: 640px)").matches === true;
 }
 
 function updateTask(card, task) {
