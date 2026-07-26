@@ -13,7 +13,7 @@
 
     <groupId>com.milkywaytelescope</groupId>
     <artifactId>telescope-next</artifactId>
-    <version>0.1.0</version>
+    <version>0.2.0</version>
     <name>Milky Way Telescope Next</name>
     <description>Read-only multi-character WebSocket monitor.</description>
 
