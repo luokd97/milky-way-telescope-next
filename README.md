@@ -6,9 +6,10 @@ Read-only, multi-character WebSocket monitor for Milky Way Idle.
 
 - One isolated WSS session per character.
 - In-memory ring buffer containing the latest 100 messages per character.
-- Typed connection and character summary state with room for additional message projectors.
-- Password-protected dashboard and connection administration.
+- Typed character projections for actions, tasks, consumables, battles, inventory highlights, and alerts.
+- Password-protected dashboard and global settings.
 - Runtime URL/access-token updates persisted outside the application JAR.
+- Globally configurable character-card section order.
 - Protocol-aware session takeover handling that yields for two hours instead of fighting the official game client.
 - GitHub Release workflow for reproducible Java 21 builds.
 
@@ -27,7 +28,7 @@ export MONITOR_SITE_PASSWORD='choose-a-local-password'
 mvn spring-boot:run
 ```
 
-Open <http://127.0.0.1:8081>. WSS connections do not start automatically by default. Add or reconnect characters from <http://127.0.0.1:8081/admin>.
+Open <http://127.0.0.1:8081>. WSS connections do not start automatically by default. Add or reconnect characters and configure the Dashboard from <http://127.0.0.1:8081/settings>.
 
 Runtime profiles are written to `data/connections.json`, which is excluded from Git. A stored profile contains only:
 
@@ -46,7 +47,7 @@ Never commit a real profile.
 If the server sends a `close_session` message with `shouldReconnect: false`, Telescope records the
 message, cancels automatic reconnects, and yields that character for two hours. The yield deadline
 is persisted in `data/connection-control.json`, survives application restarts, and can be resumed or
-extended from the connection admin.
+extended from Settings. Dashboard display settings are persisted separately in `data/settings.json`.
 
 ## Configuration
 
@@ -58,8 +59,12 @@ extended from the connection admin.
 | `SESSION_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
 | `TELESCOPE_CONNECTION_FILE` | `data/connections.json` | External profile file |
 | `TELESCOPE_CONTROL_FILE` | `data/connection-control.json` | External takeover-yield state file |
+| `TELESCOPE_SETTINGS_FILE` | `data/settings.json` | Global Dashboard settings file |
 | `TELESCOPE_AUTO_CONNECT` | `false` | Connect stored profiles during startup |
 | `TELESCOPE_WSS_TAKEOVER_YIELD_DURATION` | `2h` | Delay before automatically resuming after another game session takes over |
+| `TELESCOPE_RECENT_EVENT_LIMIT` | `50` | Maximum low-inventory alerts retained per character |
+| `TELESCOPE_INVENTORY_HIGHLIGHT_LIMIT` | `12` | Maximum inventory highlights shown per character |
+| `TELESCOPE_INVENTORY_WATCH_TERMS` | empty | Comma-separated inventory names/HRID fragments to prioritize |
 
 ## Build
 
@@ -91,6 +96,7 @@ Keep the JAR, state, and secrets in separate locations:
 /opt/telescope-next/app.jar
 /var/lib/telescope-next/connections.json
 /var/lib/telescope-next/connection-control.json
+/var/lib/telescope-next/settings.json
 /etc/telescope-next/telescope-next.env
 ```
 

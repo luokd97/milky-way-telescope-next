@@ -14,18 +14,32 @@ public class ConnectionRegistry {
     private final ObjectMapper objectMapper;
     private final int recentLimit;
     private final int maxPayloadBytes;
+    private final int recentEventLimit;
+    private final int inventoryHighlightLimit;
+    private final List<String> inventoryWatchTerms;
     private final ConcurrentMap<String, CharacterSession> sessions = new ConcurrentHashMap<>();
 
     public ConnectionRegistry(ObjectMapper objectMapper, TelescopeProperties properties) {
         this.objectMapper = objectMapper;
         this.recentLimit = Math.max(1, properties.getMessage().getRecentLimit());
         this.maxPayloadBytes = Math.max(1, properties.getMessage().getMaxPayloadBytes());
+        this.recentEventLimit = Math.max(1, properties.getState().getRecentEventLimit());
+        this.inventoryHighlightLimit = Math.max(1, properties.getInventory().getHighlightLimit());
+        this.inventoryWatchTerms = List.copyOf(properties.getInventory().getWatchTerms());
     }
 
     public CharacterSession getOrCreate(ConnectionProfile profile) {
         CharacterSession session = sessions.computeIfAbsent(
                 profile.characterId(),
-                characterId -> new CharacterSession(characterId, objectMapper, recentLimit, maxPayloadBytes)
+                characterId -> new CharacterSession(
+                        characterId,
+                        objectMapper,
+                        recentLimit,
+                        maxPayloadBytes,
+                        recentEventLimit,
+                        inventoryHighlightLimit,
+                        inventoryWatchTerms
+                )
         );
         session.markConfigured(profile);
         return session;

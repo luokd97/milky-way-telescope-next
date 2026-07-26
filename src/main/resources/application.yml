@@ -26,9 +26,15 @@ telescope:
   storage:
     connection-file: ${TELESCOPE_CONNECTION_FILE:data/connections.json}
     control-file: ${TELESCOPE_CONTROL_FILE:data/connection-control.json}
+    settings-file: ${TELESCOPE_SETTINGS_FILE:data/settings.json}
   message:
     recent-limit: 100
     max-payload-bytes: 1048576
+  state:
+    recent-event-limit: ${TELESCOPE_RECENT_EVENT_LIMIT:50}
+  inventory:
+    highlight-limit: ${TELESCOPE_INVENTORY_HIGHLIGHT_LIMIT:12}
+    watch-terms: ${TELESCOPE_INVENTORY_WATCH_TERMS:}
   wss:
     auto-connect: ${TELESCOPE_AUTO_CONNECT:false}
     auto-reconnect: true

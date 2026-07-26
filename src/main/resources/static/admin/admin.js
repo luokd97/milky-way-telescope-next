@@ -1,25 +1,146 @@
 let csrf;
 let connections = [];
+let sectionOrder = [];
+let savedSectionOrder = [];
+
+const DASHBOARD_SECTIONS = [
+  {
+    id: "currentActivity",
+    label: "Current Activity",
+    description: "Current action, tasks, consumables, and battle status.",
+  },
+  {
+    id: "inventoryHighlights",
+    label: "Inventory Highlights",
+    description: "Watched or highest-quantity inventory items.",
+  },
+  {
+    id: "actionQueue",
+    label: "Action Queue",
+    description: "Current and upcoming queued actions.",
+  },
+  {
+    id: "recentAlerts",
+    label: "Recent Alerts",
+    description: "Recent low-inventory events.",
+  },
+];
+const DEFAULT_SECTION_ORDER = DASHBOARD_SECTIONS.map(section => section.id);
 
 document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("connection-form").addEventListener("submit", saveConnection);
   document.getElementById("cancel-edit").addEventListener("click", resetForm);
   document.getElementById("connection-list").addEventListener("click", handleAction);
+  document.getElementById("dashboard-order-form").addEventListener("submit", saveDashboardSettings);
+  document.getElementById("section-order-list").addEventListener("click", moveDashboardSection);
+  document.getElementById("restore-section-order").addEventListener("click", restoreSectionOrder);
   try {
     csrf = await fetchJson("/api/security/csrf");
-    await refresh();
-    window.setInterval(refresh, 2000);
+    attachCsrfToLogout();
+    const results = await Promise.allSettled([refreshConnections(), loadDashboardSettings()]);
+    if (results[0].status === "rejected") {
+      showMessage(results[0].reason.message, true);
+    }
+    if (results[1].status === "rejected") {
+      showDashboardSettingsMessage(results[1].reason.message, true);
+    }
+    window.setInterval(() => refreshConnections().catch(() => {}), 2000);
   } catch (error) {
     showMessage(error.message, true);
+    showDashboardSettingsMessage(error.message, true);
   }
 });
 
-async function refresh() {
+function attachCsrfToLogout() {
+  const form = document.getElementById("logout-form");
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = csrf.parameterName;
+  input.value = csrf.token;
+  form.appendChild(input);
+}
+
+async function refreshConnections() {
   connections = await fetchJson("/api/admin/connections");
   document.getElementById("connection-count").textContent = connections.length;
   const list = document.getElementById("connection-list");
   list.innerHTML = connections.length ? connections.map(connectionRow).join("") :
     `<p class="muted">No characters configured.</p>`;
+}
+
+async function loadDashboardSettings() {
+  const settings = await fetchJson("/api/admin/settings/dashboard");
+  sectionOrder = normalizeSectionOrder(settings.sectionOrder);
+  savedSectionOrder = [...sectionOrder];
+  renderSectionOrder();
+}
+
+function renderSectionOrder() {
+  const root = document.getElementById("section-order-list");
+  root.innerHTML = sectionOrder.map((sectionId, index) => {
+    const section = DASHBOARD_SECTIONS.find(candidate => candidate.id === sectionId);
+    return `
+      <li class="section-order-row" data-section="${escapeHtml(sectionId)}">
+        <span class="section-order-position" aria-hidden="true">${index + 1}</span>
+        <span class="section-order-copy">
+          <strong>${escapeHtml(section.label)}</strong>
+          <span>${escapeHtml(section.description)}</span>
+        </span>
+        <span class="section-order-controls">
+          <button class="order-button" type="button" data-move="up"
+              aria-label="Move ${escapeHtml(section.label)} up" ${index === 0 ? "disabled" : ""}>↑</button>
+          <button class="order-button" type="button" data-move="down"
+              aria-label="Move ${escapeHtml(section.label)} down"
+              ${index === sectionOrder.length - 1 ? "disabled" : ""}>↓</button>
+        </span>
+      </li>`;
+  }).join("");
+  document.getElementById("save-section-order").disabled = arraysEqual(sectionOrder, savedSectionOrder);
+}
+
+function moveDashboardSection(event) {
+  const button = event.target.closest("button[data-move]");
+  if (!button) return;
+  const row = button.closest("[data-section]");
+  const from = sectionOrder.indexOf(row.dataset.section);
+  const to = button.dataset.move === "up" ? from - 1 : from + 1;
+  if (from < 0 || to < 0 || to >= sectionOrder.length) return;
+  [sectionOrder[from], sectionOrder[to]] = [sectionOrder[to], sectionOrder[from]];
+  renderSectionOrder();
+  document.getElementById("dashboard-settings-message").hidden = true;
+}
+
+function restoreSectionOrder() {
+  sectionOrder = [...DEFAULT_SECTION_ORDER];
+  renderSectionOrder();
+  document.getElementById("dashboard-settings-message").hidden = true;
+}
+
+async function saveDashboardSettings(event) {
+  event.preventDefault();
+  try {
+    const settings = await mutate("/api/admin/settings/dashboard", "PUT", { sectionOrder });
+    sectionOrder = normalizeSectionOrder(settings.sectionOrder);
+    savedSectionOrder = [...sectionOrder];
+    renderSectionOrder();
+    showDashboardSettingsMessage("Dashboard order saved. Character cards will update on their next refresh.", false);
+  } catch (error) {
+    showDashboardSettingsMessage(error.message, true);
+  }
+}
+
+function normalizeSectionOrder(order) {
+  if (!Array.isArray(order)
+      || order.length !== DEFAULT_SECTION_ORDER.length
+      || new Set(order).size !== DEFAULT_SECTION_ORDER.length
+      || order.some(section => !DEFAULT_SECTION_ORDER.includes(section))) {
+    return [...DEFAULT_SECTION_ORDER];
+  }
+  return [...order];
+}
+
+function arraysEqual(first, second) {
+  return first.length === second.length && first.every((value, index) => value === second[index]);
 }
 
 function connectionRow(connection) {
@@ -36,8 +157,9 @@ function connectionRow(connection) {
         ${connection.error ? `<p class="notice error">${escapeHtml(connection.error)}</p>` : ""}
         ${connection.status === "yielded" ? `
           <p class="notice">
-            ${escapeHtml(connection.yieldReason || "Another game session was opened.")}
-            Automatic resume ${escapeHtml(formatResume(connection.resumeAt))}.
+            Game opened elsewhere · ${connection.resumeAt
+              ? `Resume ${escapeHtml(formatResume(connection.resumeAt))}`
+              : "Manual resume required"}
           </p>` : ""}
       </div>
       <div class="button-row">
@@ -67,7 +189,7 @@ async function saveConnection(event) {
   try {
     await mutate(endpoint, editingId ? "PUT" : "POST", payload);
     resetForm();
-    await refresh();
+    await refreshConnections();
   } catch (error) {
     showMessage(error.message, true);
   }
@@ -97,7 +219,7 @@ async function handleAction(event) {
     } else if (action === "delete") {
       await mutate(`/api/admin/connections/${encodeURIComponent(id)}`, "DELETE");
     }
-    await refresh();
+    await refreshConnections();
   } catch (error) {
     showMessage(error.message, true);
   }
@@ -156,6 +278,13 @@ async function fetchJson(url) {
 
 function showMessage(message, error) {
   const root = document.getElementById("form-message");
+  root.textContent = message;
+  root.className = `notice${error ? " error" : ""}`;
+  root.hidden = false;
+}
+
+function showDashboardSettingsMessage(message, error) {
+  const root = document.getElementById("dashboard-settings-message");
   root.textContent = message;
   root.className = `notice${error ? " error" : ""}`;
   root.hidden = false;

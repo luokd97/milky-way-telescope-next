@@ -9,24 +9,57 @@
 </head>
 <body>
 <header class="site-header">
-    <div>
-        <p class="eyebrow">Milky Way Idle observer</p>
+    <div class="site-header-copy">
         <h1>Telescope Next</h1>
+        <p id="monitor-summary" class="header-summary">
+            <span class="header-summary-item">Waiting for monitor data</span>
+            <span class="header-summary-mobile">
+                <span class="header-summary-mobile-text">Waiting</span>
+            </span>
+        </p>
     </div>
     <nav>
-        <a href="/admin">Connections</a>
-        <form method="post" action="/logout" id="logout-form">
-            <button class="button-secondary" type="submit">Sign out</button>
-        </form>
+        <a class="settings-link" href="/settings" aria-label="Settings">
+            <span class="settings-icon" aria-hidden="true">&#9881;&#xfe0e;</span>
+            <span class="settings-label">Settings</span>
+        </a>
     </nav>
 </header>
 <main class="page-shell">
-    <section class="summary-bar">
-        <div><strong id="character-count">0</strong><span>characters</span></div>
-        <div><strong id="connected-count">0</strong><span>connected</span></div>
-        <span id="last-refresh" class="muted">Waiting for data</span>
-    </section>
     <section id="character-grid" class="character-grid" aria-live="polite"></section>
+
+    <details id="diagnostics" class="diagnostics-panel">
+        <summary>
+            <span>
+                <span class="eyebrow">Diagnostics</span>
+                <strong>Recent messages</strong>
+            </span>
+            <span class="muted">Open protocol trace</span>
+        </summary>
+        <div class="diagnostics-body">
+            <div class="panel-heading">
+                <label class="diagnostic-character-field">
+                    <span>Character</span>
+                    <select id="diagnostic-character" aria-label="Diagnostic character"></select>
+                </label>
+                <span id="diagnostic-count" class="panel-meta">0 messages</span>
+            </div>
+            <div class="table-wrap">
+                <table class="messages-table">
+                    <thead>
+                    <tr>
+                        <th>Seq</th>
+                        <th>Time</th>
+                        <th>Bytes</th>
+                        <th>Type</th>
+                        <th>Summary</th>
+                    </tr>
+                    </thead>
+                    <tbody id="diagnostic-messages"></tbody>
+                </table>
+            </div>
+        </div>
+    </details>
 </main>
 </body>
 </html>

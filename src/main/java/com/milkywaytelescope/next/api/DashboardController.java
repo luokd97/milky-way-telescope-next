@@ -3,6 +3,8 @@ package com.milkywaytelescope.next.api;
 import com.milkywaytelescope.next.state.CharacterSession.CharacterSnapshot;
 import com.milkywaytelescope.next.state.CharacterSession.MessageView;
 import com.milkywaytelescope.next.state.ConnectionRegistry;
+import com.milkywaytelescope.next.settings.DashboardSettings;
+import com.milkywaytelescope.next.settings.DashboardSettingsStore;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.http.CacheControl;
@@ -19,16 +21,18 @@ import static org.springframework.http.HttpStatus.NOT_FOUND;
 @RequestMapping("/api")
 public class DashboardController {
     private final ConnectionRegistry registry;
+    private final DashboardSettingsStore settingsStore;
 
-    public DashboardController(ConnectionRegistry registry) {
+    public DashboardController(ConnectionRegistry registry, DashboardSettingsStore settingsStore) {
         this.registry = registry;
+        this.settingsStore = settingsStore;
     }
 
     @GetMapping("/dashboard")
     public ResponseEntity<DashboardView> dashboard() {
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())
-                .body(new DashboardView(Instant.now(), registry.snapshots(20, false)));
+                .body(new DashboardView(Instant.now(), settingsStore.current(), registry.snapshots(20, false)));
     }
 
     @GetMapping("/characters/{characterId}/messages")
@@ -47,6 +51,10 @@ public class DashboardController {
                 .body(session.snapshot(boundedLimit, includePayload).recentMessages());
     }
 
-    public record DashboardView(Instant generatedAt, List<CharacterSnapshot> characters) {
+    public record DashboardView(
+            Instant generatedAt,
+            DashboardSettings settings,
+            List<CharacterSnapshot> characters
+    ) {
     }
 }

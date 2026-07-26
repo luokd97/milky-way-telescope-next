@@ -19,6 +19,7 @@ public final class CharacterSession {
     private final ObjectMapper objectMapper;
     private final int recentLimit;
     private final int maxPayloadBytes;
+    private final CharacterProjection projection;
     private final Deque<MessageEnvelope> recentMessages = new ArrayDeque<>();
     private final Map<String, Long> messageCountsByType = new LinkedHashMap<>();
 
@@ -37,8 +38,6 @@ public final class CharacterSession {
     private Instant resumeAt;
     private String yieldReason;
     private long totalMessages;
-    private String characterName;
-    private String gameMode;
 
     public CharacterSession(
             String characterId,
@@ -46,10 +45,28 @@ public final class CharacterSession {
             int recentLimit,
             int maxPayloadBytes
     ) {
+        this(characterId, objectMapper, recentLimit, maxPayloadBytes, 50, 12, List.of());
+    }
+
+    public CharacterSession(
+            String characterId,
+            ObjectMapper objectMapper,
+            int recentLimit,
+            int maxPayloadBytes,
+            int recentEventLimit,
+            int inventoryHighlightLimit,
+            List<String> inventoryWatchTerms
+    ) {
         this.characterId = characterId;
         this.objectMapper = objectMapper;
         this.recentLimit = Math.max(1, recentLimit);
         this.maxPayloadBytes = Math.max(1, maxPayloadBytes);
+        this.projection = new CharacterProjection(
+                characterId,
+                recentEventLimit,
+                inventoryHighlightLimit,
+                inventoryWatchTerms
+        );
     }
 
     public synchronized long beginGeneration(ConnectionProfile profile) {
@@ -68,8 +85,6 @@ public final class CharacterSession {
         resumeAt = null;
         yieldReason = null;
         totalMessages = 0;
-        characterName = null;
-        gameMode = null;
         recentMessages.clear();
         messageCountsByType.clear();
         return generation;
@@ -157,7 +172,7 @@ public final class CharacterSession {
             try {
                 payload = objectMapper.readTree(rawPayload);
                 type = text(payload, "type", "unknown");
-                project(type, payload);
+                projection.apply(generation, type, payload, receivedAt, nextSequence);
                 summary = summarize(type, payload);
                 JsonNode shouldReconnect = payload.path("shouldReconnect");
                 if ("close_session".equals(type)
@@ -220,6 +235,7 @@ public final class CharacterSession {
                     includePayload ? message.rawPayload() : null
             ));
         }
+        var projected = projection.snapshot(generation, status);
         return new CharacterSnapshot(
                 new ConnectionView(
                         characterId,
@@ -239,7 +255,16 @@ public final class CharacterSession {
                         yieldReason,
                         totalMessages
                 ),
-                characterName == null ? null : new CharacterView(characterId, characterName, gameMode),
+                projected.dataStatus(),
+                projected.dataUpdatedAt(),
+                projected.character(),
+                projected.task(),
+                projected.currentAction(),
+                projected.currentActionDrinkSlots(),
+                projected.actionQueue(),
+                projected.battle(),
+                projected.inventoryHighlights(),
+                projected.recentEvents(),
                 Map.copyOf(messageCountsByType),
                 messages
         );
@@ -249,17 +274,6 @@ public final class CharacterSession {
         recentMessages.addLast(message);
         while (recentMessages.size() > recentLimit) {
             recentMessages.removeFirst();
-        }
-    }
-
-    private void project(String type, JsonNode payload) {
-        if (!"init_character_data".equals(type)) {
-            return;
-        }
-        JsonNode character = payload.get("character");
-        if (character != null && !character.isNull()) {
-            characterName = text(character, "name", null);
-            gameMode = text(character, "gameMode", null);
         }
     }
 
@@ -288,7 +302,16 @@ public final class CharacterSession {
 
     public record CharacterSnapshot(
             ConnectionView connection,
+            String dataStatus,
+            Instant dataUpdatedAt,
             CharacterView character,
+            TaskView task,
+            ActionView currentAction,
+            List<ActionDrinkSlotView> currentActionDrinkSlots,
+            List<ActionView> actionQueue,
+            BattleView battle,
+            List<ItemView> inventoryHighlights,
+            List<MonitorEventView> recentEvents,
             Map<String, Long> messageCountsByType,
             List<MessageView> recentMessages
     ) {
@@ -314,7 +337,74 @@ public final class CharacterSession {
     ) {
     }
 
-    public record CharacterView(String id, String name, String gameMode) {
+    public record CharacterView(
+            String id,
+            String name,
+            String gameMode,
+            Boolean online,
+            Instant serverTimestamp,
+            int actionQueueSize,
+            int itemStackCount
+    ) {
+    }
+
+    public record TaskView(int currentCount, int maxCount, Instant overflowAt) {
+    }
+
+    public record ActionView(
+            String actionHrid,
+            String label,
+            Integer difficultyTier,
+            Long currentCount,
+            Long maxCount,
+            Long ordinal,
+            Integer wave,
+            Boolean done,
+            boolean current,
+            Instant updatedAt
+    ) {
+    }
+
+    public record ActionDrinkSlotView(
+            Integer slotIndex,
+            String itemHrid,
+            String label,
+            Integer enhancementLevel,
+            Double count
+    ) {
+    }
+
+    public record BattleView(
+            boolean active,
+            Long battleId,
+            Instant combatStartTime,
+            Integer wave,
+            long totalBattlesSeen,
+            List<Double> foodConsumableCounts,
+            List<Double> drinkConsumableCounts
+    ) {
+    }
+
+    public record ItemView(
+            String itemHash,
+            String itemHrid,
+            String label,
+            String locationHrid,
+            Integer enhancementLevel,
+            Double count
+    ) {
+    }
+
+    public record MonitorEventView(
+            long id,
+            long sourceMessageSequence,
+            Instant occurredAt,
+            String type,
+            String itemHrid,
+            String label,
+            Integer enhancementLevel,
+            Double count
+    ) {
     }
 
     public record MessageView(

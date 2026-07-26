@@ -15,8 +15,13 @@ public class PageController {
         return "forward:/index.html";
     }
 
+    @GetMapping("/settings")
+    public String settings() {
+        return "forward:/admin/index.html";
+    }
+
     @GetMapping("/admin")
     public String admin() {
-        return "forward:/admin/index.html";
+        return "redirect:/settings";
     }
 }

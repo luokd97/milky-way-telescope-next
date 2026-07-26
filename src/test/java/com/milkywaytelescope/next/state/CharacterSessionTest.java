@@ -120,4 +120,39 @@ class CharacterSessionTest {
         assertThat(connection.resumeAt()).isEqualTo(resumeAt);
         assertThat(connection.closeCode()).isEqualTo(1000);
     }
+
+    @Test
+    void retainsProjectedStateAcrossReconnectsAndMarksItsFreshness() {
+        CharacterSession session = new CharacterSession("7", new ObjectMapper(), 100, 4096);
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=7",
+                "sample-token"
+        );
+        long firstGeneration = session.beginGeneration(profile);
+        session.markConnected(firstGeneration);
+        session.recordText(firstGeneration, """
+                {"type":"init_character_data","character":{"id":7,"name":"First","gameMode":"standard"}}
+                """);
+
+        assertThat(session.snapshot(0, false).dataStatus()).isEqualTo("live");
+
+        long secondGeneration = session.beginGeneration(profile);
+        var staleSnapshot = session.snapshot(0, false);
+        assertThat(staleSnapshot.dataStatus()).isEqualTo("stale");
+        assertThat(staleSnapshot.character().name()).isEqualTo("First");
+
+        session.recordText(secondGeneration, "{\"type\":\"items_updated\",\"endCharacterItems\":[]}");
+        assertThat(session.snapshot(0, false).character().name()).isEqualTo("First");
+
+        session.markConnected(secondGeneration);
+        session.recordText(secondGeneration, """
+                {"type":"init_character_data","character":{"id":7,"name":"Second","gameMode":"ironcow"}}
+                """);
+        var liveSnapshot = session.snapshot(0, false);
+        assertThat(liveSnapshot.dataStatus()).isEqualTo("live");
+        assertThat(liveSnapshot.character().name()).isEqualTo("Second");
+
+        session.markClosed(secondGeneration, 1000, "closed");
+        assertThat(session.snapshot(0, false).dataStatus()).isEqualTo("stale");
+    }
 }
