@@ -185,16 +185,6 @@ button:disabled {
 .character-meta { margin-top: 5px; font-size: 12px; }
 .mode-badge { padding: 2px 6px; border-radius: 5px; background: #213c51; color: #c8e8ff; font-size: 11px; font-weight: 800; }
 .status-stack { display: grid; justify-items: end; gap: 6px; flex-shrink: 0; }
-.card-details-toggle {
-    display: none;
-    padding: 3px 0;
-    background: transparent;
-    color: var(--accent);
-    font-size: 11px;
-    font-weight: 800;
-    white-space: nowrap;
-}
-.card-details-toggle:hover { color: var(--accent-strong); }
 
 .status,
 .battle-state {
@@ -442,12 +432,11 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
         display: none;
     }
 
-    .character-card-intro { cursor: pointer; }
-    .card-details-toggle {
-        display: inline-flex;
-        align-items: center;
-        min-height: 24px;
-        touch-action: manipulation;
+    .character-card-intro { cursor: pointer; touch-action: manipulation; }
+    .character-card-intro[role="button"]:focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 4px;
+        border-radius: 8px;
     }
     .character-card[data-details-expanded="true"]
         [data-dashboard-section]:not([data-dashboard-section="currentActivity"]) {

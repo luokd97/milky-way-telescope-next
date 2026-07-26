@@ -19,6 +19,7 @@ const DEFAULT_SECTION_ORDER = [
 
 document.addEventListener("DOMContentLoaded", () => {
   grid.addEventListener("click", handleCardAction);
+  grid.addEventListener("keydown", handleCardSummaryKeydown);
   document.getElementById("diagnostic-character").addEventListener("change", event => {
     state.diagnosticCharacterId = event.target.value || null;
     renderDiagnostics(state.dashboard);
@@ -186,7 +187,8 @@ function createCharacterCard() {
   card.className = "character-card";
   card.dataset.detailsExpanded = "false";
   card.innerHTML = `
-    <div class="character-card-intro" data-card-summary="true">
+    <div class="character-card-intro" data-card-summary="true"
+        role="button" tabindex="0" aria-expanded="false">
       <header class="character-card-header">
         <div class="character-identity">
           <div class="character-name-line">
@@ -200,9 +202,6 @@ function createCharacterCard() {
         </div>
         <div class="status-stack">
           <span class="status" data-field="character-status"></span>
-          <button class="card-details-toggle" type="button"
-              data-field="details-toggle" data-card-action="toggle-card-details"
-              aria-expanded="false"></button>
         </div>
       </header>
       <div data-field="notices"></div>
@@ -287,7 +286,7 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   const characterName = character.name || "Waiting for character data";
   setElementText(field("character-id"), `#${connection.characterId || id}`);
   setElementText(field("character-name"), characterName);
-  updateCardDetailsToggle(card, detailsId, characterName);
+  updateCardSummaryState(card, detailsId, characterName);
   const mode = modeLabel(character.gameMode);
   const modeElement = field("character-mode");
   setElementText(modeElement, mode);
@@ -349,10 +348,6 @@ function handleCardAction(event) {
     const card = button.closest(".character-card");
     if (!card) return;
 
-    if (button.dataset.cardAction === "toggle-card-details") {
-      toggleCardDetails(card);
-      return;
-    }
     if (button.dataset.cardAction !== "toggle-action-queue") return;
 
     const expanded = card.dataset.actionQueueExpanded === "true";
@@ -370,32 +365,40 @@ function handleCardAction(event) {
   toggleCardDetails(card);
 }
 
+function handleCardSummaryKeydown(event) {
+  if (event.key !== "Enter" && event.key !== " ") return;
+  const summary = event.target.closest("[data-card-summary]");
+  const card = summary?.closest(".character-card");
+  if (!card || !isMobileViewport()) return;
+  event.preventDefault();
+  toggleCardDetails(card);
+}
+
 function toggleCardDetails(card) {
   setCardDetailsExpanded(card, card.dataset.detailsExpanded !== "true");
 }
 
 function setCardDetailsExpanded(card, expanded) {
   card.dataset.detailsExpanded = String(expanded);
-  const toggle = card.querySelector("[data-field='details-toggle']");
-  if (!toggle) return;
+  const summary = card.querySelector("[data-card-summary]");
+  if (!summary) return;
 
   const name = card.querySelector("[data-field='character-name']")?.textContent || "character";
-  setElementText(toggle, expanded ? "Show less" : "More details");
-  toggle.setAttribute("aria-expanded", String(expanded));
-  toggle.setAttribute(
+  summary.setAttribute("aria-expanded", String(expanded));
+  summary.setAttribute(
     "aria-label",
     expanded ? `Collapse ${name} details` : `Show more ${name} details`,
   );
 }
 
-function updateCardDetailsToggle(card, detailsId, characterName) {
-  const toggle = card.querySelector("[data-field='details-toggle']");
-  if (!toggle) return;
+function updateCardSummaryState(card, detailsId, characterName) {
+  const summary = card.querySelector("[data-card-summary]");
+  if (!summary) return;
   const expanded = card.dataset.detailsExpanded === "true";
-  toggle.setAttribute("aria-controls", detailsId);
-  setElementText(toggle, expanded ? "Show less" : "More details");
-  toggle.setAttribute("aria-expanded", String(expanded));
-  toggle.setAttribute(
+  summary.tabIndex = isMobileViewport() ? 0 : -1;
+  summary.setAttribute("aria-controls", detailsId);
+  summary.setAttribute("aria-expanded", String(expanded));
+  summary.setAttribute(
     "aria-label",
     expanded ? `Collapse ${characterName} details` : `Show more ${characterName} details`,
   );
