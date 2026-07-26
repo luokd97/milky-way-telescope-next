@@ -30,24 +30,40 @@ mvn spring-boot:run
 
 Open <http://127.0.0.1:8081>. WSS connections do not start automatically by default. Add or reconnect characters and configure the Dashboard from <http://127.0.0.1:8081/settings>.
 
-Runtime profiles are written to `data/connections.json`, which is excluded from Git. A stored profile contains only:
+Dashboard settings, connection profiles, and takeover-yield state are stored in one owner-only JSON file at
+`data/settings.json`, which is excluded from Git. The Settings page can load, format, validate, and replace this
+complete configuration. A typical file looks like:
 
 ```json
-[
-  {
-    "characterId": "<character-id>",
-    "url": "wss://api.milkywayidle.com/ws?hash=<connection-hash>&characterId=<character-id>",
-    "accessToken": "<access-token>"
-  }
-]
+{
+  "schemaVersion": 1,
+  "dashboard": {
+    "sectionOrder": [
+      "currentActivity",
+      "inventoryHighlights",
+      "actionQueue",
+      "recentAlerts"
+    ],
+    "inventoryWatchTerms": ["wisdom_tea", "coin"]
+  },
+  "connections": [
+    {
+      "characterId": "<character-id>",
+      "url": "wss://api.milkywayidle.com/ws?hash=<connection-hash>&characterId=<character-id>",
+      "accessToken": "<access-token>"
+    }
+  ],
+  "connectionControls": []
+}
 ```
 
-Never commit a real profile.
+The `accessToken` is intentionally visible in the authenticated Settings configuration editor. Never commit a real
+configuration file.
 
 If the server sends a `close_session` message with `shouldReconnect: false`, Telescope records the
 message, cancels automatic reconnects, and yields that character for two hours. The yield deadline
-is persisted in `data/connection-control.json`, survives application restarts, and can be resumed or
-extended from Settings. Dashboard display settings are persisted separately in `data/settings.json`.
+is persisted in the unified configuration, survives application restarts, and can be resumed or extended from the
+runtime controls in Settings.
 
 ## Configuration
 
@@ -57,14 +73,13 @@ extended from Settings. Dashboard display settings are persisted separately in `
 | `SERVER_ADDRESS` | `127.0.0.1` | HTTP bind address |
 | `SERVER_PORT` | `8081` | HTTP port |
 | `SESSION_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
-| `TELESCOPE_CONNECTION_FILE` | `data/connections.json` | External profile file |
-| `TELESCOPE_CONTROL_FILE` | `data/connection-control.json` | External takeover-yield state file |
-| `TELESCOPE_SETTINGS_FILE` | `data/settings.json` | Global Dashboard settings file |
+| `TELESCOPE_SETTINGS_FILE` | `data/settings.json` | Unified Dashboard, connection, and connection-control configuration |
+| `TELESCOPE_CONNECTION_FILE` | `data/connections.json` | Legacy profile path used only during migration |
+| `TELESCOPE_CONTROL_FILE` | `data/connection-control.json` | Legacy takeover-yield path used only during migration |
 | `TELESCOPE_AUTO_CONNECT` | `false` | Connect stored profiles during startup |
 | `TELESCOPE_WSS_TAKEOVER_YIELD_DURATION` | `2h` | Delay before automatically resuming after another game session takes over |
 | `TELESCOPE_RECENT_EVENT_LIMIT` | `50` | Maximum low-inventory alerts retained per character |
 | `TELESCOPE_INVENTORY_HIGHLIGHT_LIMIT` | `12` | Maximum inventory highlights shown per character |
-| `TELESCOPE_INVENTORY_WATCH_TERMS` | empty | Comma-separated inventory names/HRID fragments to prioritize |
 
 ## Build
 
@@ -94,8 +109,6 @@ Keep the JAR, state, and secrets in separate locations:
 
 ```text
 /opt/telescope-next/app.jar
-/var/lib/telescope-next/connections.json
-/var/lib/telescope-next/connection-control.json
 /var/lib/telescope-next/settings.json
 /etc/telescope-next/telescope-next.env
 ```
@@ -117,7 +130,11 @@ cd /tmp
 sha256sum --check telescope-next.jar.sha256
 ```
 
-Run the service as a dedicated unprivileged user, bind it to `127.0.0.1:8081`, and expose it through an HTTPS reverse proxy. Keep `MONITOR_SITE_PASSWORD` in the systemd environment file and point `TELESCOPE_CONNECTION_FILE` at `/var/lib/telescope-next/connections.json`.
+Run the service as a dedicated unprivileged user, bind it to `127.0.0.1:8081`, and expose it through an HTTPS reverse proxy. Keep `MONITOR_SITE_PASSWORD` in the systemd environment file and point `TELESCOPE_SETTINGS_FILE` at `/var/lib/telescope-next/settings.json`.
+
+On first startup with legacy files, the application merges the old settings, profile, and control files into the
+unified file. It keeps each source as a `.pre-unified.bak` backup and does not delete the originals. After checking
+the migrated file, remove the legacy environment variables and files when convenient.
 
 The `deploy/` directory contains a systemd unit, environment template, and release installer. On Debian, run the installer as root with an explicit tag:
 
@@ -131,8 +148,9 @@ The installer verifies the checksum and atomically replaces the JAR, but intenti
 
 - Every page and API except login and health requires authentication.
 - Mutating requests require a CSRF token.
-- API responses and logs redact the connection hash and never return access tokens.
-- The profile file is written with owner-only permissions on POSIX filesystems.
+- Dashboard API responses and runtime status views redact the connection hash and never return access tokens.
+- The complete plaintext configuration is available only through the authenticated, CSRF-protected Settings API.
+- The unified configuration file is written with owner-only permissions on POSIX filesystems.
 
 ## License
 

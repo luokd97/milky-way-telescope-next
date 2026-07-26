@@ -20,6 +20,19 @@ const DEFAULT_SECTION_ORDER = [
 document.addEventListener("DOMContentLoaded", () => {
   grid.addEventListener("click", handleCardAction);
   grid.addEventListener("keydown", handleCardSummaryKeydown);
+  const diagnosticsDialog = document.getElementById("diagnostics-dialog");
+  const diagnosticsOpen = document.getElementById("diagnostics-open");
+  const diagnosticsClose = document.getElementById("diagnostics-close");
+
+  diagnosticsOpen.addEventListener("click", () => {
+    if (!diagnosticsDialog.open) diagnosticsDialog.showModal();
+  });
+  diagnosticsClose.addEventListener("click", () => diagnosticsDialog.close());
+  diagnosticsDialog.addEventListener("click", event => {
+    if (event.target === diagnosticsDialog) diagnosticsDialog.close();
+  });
+  diagnosticsDialog.addEventListener("close", () => diagnosticsOpen.focus());
+
   document.getElementById("diagnostic-character").addEventListener("change", event => {
     state.diagnosticCharacterId = event.target.value || null;
     renderDiagnostics(state.dashboard);
@@ -233,17 +246,15 @@ function createCharacterCard() {
 
       <section class="card-subpanel" data-dashboard-section="inventoryHighlights">
         <div class="section-heading">
-          <span>Inventory highlights</span>
-          <span class="section-meta" data-field="inventory-count"></span>
+          <span>Inventory highlights<span class="section-meta" data-field="inventory-count"></span></span>
         </div>
         <div class="inventory-list" data-field="inventory"></div>
       </section>
 
       <section class="card-subpanel" data-dashboard-section="actionQueue">
         <div class="section-heading">
-          <span>Action queue</span>
+          <span>Action queue<span class="section-meta" data-field="action-queue-count"></span></span>
           <span class="section-heading-actions">
-            <span class="section-meta" data-field="action-queue-count"></span>
             <button class="section-toggle" type="button"
                 data-field="action-queue-toggle" data-card-action="toggle-action-queue"
                 aria-expanded="false" hidden></button>
@@ -251,7 +262,6 @@ function createCharacterCard() {
         </div>
         <div class="table-wrap compact-table-wrap">
           <table class="action-table">
-            <thead><tr><th>Action</th><th>Count</th></tr></thead>
             <tbody data-field="action-queue"></tbody>
           </table>
         </div>
@@ -260,7 +270,7 @@ function createCharacterCard() {
       <section class="card-subpanel event-panel" data-dashboard-section="recentAlerts">
         <div class="section-heading">
           <span>Recent alerts</span>
-          <span class="section-meta alert-meta" data-field="event-count"></span>
+          <span class="section-meta" data-field="event-count"></span>
         </div>
         <div class="event-list" data-field="events"></div>
       </section>
@@ -302,10 +312,11 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   setElementClass(field("character-status"), `status ${status.className}`);
   setElementText(field("character-status"), status.label);
   setElementText(field("status-detail"), status.detail);
+  setHidden(field("status-detail"), !status.detail);
   setElementHtml(field("notices"), noticesHtml(connection));
 
   const activeQueued = actions.filter(item => item.done !== true && item.current !== true).length;
-  setElementText(field("queued-count"), `${activeQueued} queued`);
+  setElementText(field("queued-count"), activeQueued ? `+${activeQueued} queued` : "");
   setElementText(field("action-label"), action?.label || action?.actionHrid || "No current action");
   const count = actionCount(action);
   setElementText(field("action-count"), count);
@@ -476,9 +487,9 @@ function updateBattle(card, action, battle) {
 
 function updateInventory(card, items) {
   const root = card.querySelector("[data-field='inventory']");
-  setElementText(card.querySelector("[data-field='inventory-count']"), `${items.length} shown`);
+  setElementText(card.querySelector("[data-field='inventory-count']"), `(${items.length})`);
   if (!items.length) {
-    renderEmptyElement(root, "p", "No tracked inventory yet.");
+    root.replaceChildren();
     return;
   }
 
@@ -505,7 +516,10 @@ function updateActionQueue(card, actions) {
     ? visibleActions
     : visibleActions.slice(0, ACTION_QUEUE_COLLAPSED_LIMIT);
 
-  setElementText(card.querySelector("[data-field='action-queue-count']"), `${visibleActions.length} active`);
+  setElementText(
+    card.querySelector("[data-field='action-queue-count']"),
+    `(${visibleActions.length})`,
+  );
   setElementText(
     toggle,
     expanded ? "Show less" : `+${Math.max(0, visibleActions.length - ACTION_QUEUE_COLLAPSED_LIMIT)} more`,
@@ -523,7 +537,7 @@ function updateActionQueue(card, actions) {
   }
 
   if (!visibleActions.length) {
-    renderEmptyTableRow(root, "No queued actions.");
+    root.replaceChildren();
     return;
   }
 
@@ -540,9 +554,12 @@ function updateActionQueue(card, actions) {
 function updateEvents(card, events) {
   const root = card.querySelector("[data-field='events']");
   const visibleEvents = events.slice(0, 8);
-  setElementText(card.querySelector("[data-field='event-count']"), `${events.length} alerts`);
+  setElementText(
+    card.querySelector("[data-field='event-count']"),
+    `${events.length} alert${events.length === 1 ? "" : "s"}`,
+  );
   if (!visibleEvents.length) {
-    renderEmptyElement(root, "p", "No low-inventory alerts.");
+    root.replaceChildren();
     return;
   }
 
@@ -729,10 +746,7 @@ function createActionRow() {
   const actionCell = document.createElement("td");
   const label = document.createElement("span");
   label.dataset.role = "label";
-  const current = document.createElement("small");
-  current.dataset.role = "current";
-  current.textContent = "Current";
-  actionCell.append(label, current);
+  actionCell.append(label);
 
   const count = document.createElement("td");
   count.dataset.role = "count";
@@ -743,7 +757,6 @@ function createActionRow() {
 function updateActionRow(row, action) {
   setElementClass(row, action.current ? "current-row" : "");
   setElementText(row.querySelector("[data-role='label']"), action.label || action.actionHrid || "Action");
-  setHidden(row.querySelector("[data-role='current']"), !action.current);
   setElementText(row.querySelector("[data-role='count']"), actionCount(action) || "∞");
 }
 
@@ -833,35 +846,6 @@ function removeUnkeyedChildren(root) {
   });
 }
 
-function renderEmptyElement(root, tagName, text) {
-  const existing = root.firstElementChild;
-  if (root.children.length === 1 && existing?.dataset.emptyState === "true") {
-    setElementText(existing, text);
-    return;
-  }
-  const empty = document.createElement(tagName);
-  empty.className = "empty-inline";
-  empty.dataset.emptyState = "true";
-  empty.textContent = text;
-  root.replaceChildren(empty);
-}
-
-function renderEmptyTableRow(root, text) {
-  const existing = root.firstElementChild;
-  if (root.children.length === 1 && existing?.dataset.emptyState === "true") {
-    setElementText(existing.firstElementChild, text);
-    return;
-  }
-  const row = document.createElement("tr");
-  row.dataset.emptyState = "true";
-  const cell = document.createElement("td");
-  cell.colSpan = 2;
-  cell.className = "empty-cell";
-  cell.textContent = text;
-  row.appendChild(cell);
-  root.replaceChildren(row);
-}
-
 function setElementTitle(element, value) {
   const title = String(value ?? "");
   if (element.title !== title) element.title = title;
@@ -886,7 +870,7 @@ function characterStatus(connection, dataStatus, dataUpdatedAt) {
     return {
       className: "yielded",
       label: "Yielded",
-      detail: hasSavedData ? cachedData : "No data yet",
+      detail: hasSavedData ? cachedData : "",
     };
   }
 

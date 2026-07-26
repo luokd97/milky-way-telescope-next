@@ -60,12 +60,17 @@ button:disabled {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 24px;
-    padding: 26px clamp(20px, 5vw, 72px);
+    gap: 12px;
+    padding: 10px clamp(14px, 3vw, 32px);
     border-bottom: 1px solid rgba(74, 112, 145, .45);
     background: rgba(6, 16, 27, .55);
     backdrop-filter: blur(16px);
 }
+
+.site-header h1 { font-size: 22px; }
+.site-header-brand { color: var(--text); text-decoration: none; }
+.site-header-brand:hover,
+.site-header-brand:focus-visible { color: var(--accent-strong); }
 
 .site-header nav,
 .button-row,
@@ -78,18 +83,55 @@ button:disabled {
 
 .site-header nav { flex-wrap: wrap; justify-content: flex-end; }
 .site-header nav > a { font-weight: 700; text-decoration: none; }
-.settings-link { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; }
-.settings-icon { font-size: 20px; line-height: 1; }
-.site-header-copy { min-width: 0; }
+.settings-header { padding: 10px clamp(14px, 3vw, 32px); }
+.header-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    min-height: 40px;
+    padding: 8px;
+    border: 1px solid transparent;
+    border-radius: 9px;
+    background: transparent;
+    color: var(--muted);
+}
+.header-action:hover,
+.header-action:focus-visible {
+    border-color: var(--border);
+    background: var(--panel-strong);
+    color: var(--accent-strong);
+}
+.header-icon { width: 21px; height: 21px; }
+.site-header-copy { display: flex; align-items: center; flex: 1; gap: 12px; min-width: 0; }
+.site-header-copy h1 { flex: 0 0 auto; font-size: 19px; white-space: nowrap; }
+.header-page-label {
+    display: inline-flex;
+    align-items: center;
+    min-width: 0;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 750;
+    letter-spacing: .04em;
+}
+.header-page-label::before {
+    content: "·";
+    margin-right: 8px;
+    color: #627c92;
+}
 .header-summary {
+    flex: 1;
     display: flex;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 3px 7px;
-    min-height: 20px;
-    margin-top: 7px;
+    flex-wrap: nowrap;
+    gap: 0;
+    min-width: 0;
+    min-height: 0;
+    margin-top: 0;
+    overflow: hidden;
     color: var(--muted);
-    font-size: 13px;
+    font-size: 12px;
 }
 
 .header-summary-item:not(:first-child)::before {
@@ -98,7 +140,31 @@ button:disabled {
     color: #627c92;
 }
 
-.header-summary-mobile { display: none; }
+.header-summary-item { display: none; }
+.header-summary-mobile {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    overflow: hidden;
+}
+.header-summary-mobile-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mobile-alert-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border: 1px solid rgba(255, 140, 155, .45);
+    border-radius: 999px;
+    background: rgba(255, 140, 155, .12);
+    color: var(--red);
+    font-size: 10px;
+    font-weight: 850;
+    line-height: 1;
+}
 .header-summary-warning { color: var(--amber); }
 .header-summary-alert { color: var(--red); font-weight: 750; }
 .header-refresh.refresh-error { color: var(--red); }
@@ -143,7 +209,7 @@ button:disabled {
 .panel,
 .character-card,
 .empty-card,
-.diagnostics-panel {
+.diagnostics-dialog {
     border: 1px solid var(--border);
     background: rgba(14, 28, 43, .94);
     border-radius: 16px;
@@ -210,7 +276,6 @@ button:disabled {
 .activity-panel { background: linear-gradient(145deg, rgba(22, 52, 70, .95), rgba(16, 33, 49, .9)); }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
 .section-meta { color: #b6c9d9; letter-spacing: .02em; }
-.alert-meta { color: var(--amber); }
 .section-heading-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; }
 .section-toggle {
     padding: 0;
@@ -260,7 +325,6 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
 .action-table th:last-child,
 .action-table td:last-child { width: 112px; text-align: right; white-space: nowrap; }
 .action-table td:first-child span { display: block; }
-.action-table small { color: var(--accent); font-size: 10px; font-weight: 800; text-transform: uppercase; }
 .current-row td { background: rgba(97, 217, 200, .055); }
 .empty-cell { color: var(--muted); text-align: center; }
 .empty-inline { color: var(--muted); font-size: 12px; }
@@ -273,13 +337,51 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
 .event-item small { color: var(--amber); font-size: 10px; text-transform: uppercase; }
 .event-value { color: #ffe39b; font-weight: 850; }
 
-.diagnostics-panel { margin-top: 18px; overflow: clip; }
-.diagnostics-panel > summary { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 17px 20px; cursor: pointer; list-style: none; }
-.diagnostics-panel > summary::-webkit-details-marker { display: none; }
-.diagnostics-panel > summary > span:first-child { display: grid; gap: 2px; }
-.diagnostics-panel > summary > span:last-child { font-size: 12px; }
-.diagnostics-panel[open] > summary { border-bottom: 1px solid var(--border); }
+.diagnostics-dialog {
+    width: min(1100px, calc(100vw - 32px));
+    max-width: none;
+    max-height: calc(100vh - 32px);
+    max-height: calc(100dvh - 32px);
+    margin: auto;
+    padding: 0;
+    overflow: hidden;
+}
+.diagnostics-dialog[open] { display: flex; flex-direction: column; }
+.diagnostics-dialog::backdrop {
+    background: rgba(2, 8, 14, .7);
+    backdrop-filter: blur(4px);
+}
+.diagnostics-dialog-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 18px;
+    flex: 0 0 auto;
+    padding: 17px 20px;
+    border-bottom: 1px solid var(--border);
+}
+.diagnostics-dialog-header > div { display: grid; gap: 2px; }
+.dialog-close-button {
+    display: grid;
+    place-items: center;
+    flex: 0 0 auto;
+    width: 36px;
+    min-height: 36px;
+    padding: 7px;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: var(--panel-strong);
+    color: var(--text);
+}
+.dialog-close-button:hover,
+.dialog-close-button:focus-visible {
+    border-color: var(--accent);
+    background: #193448;
+    color: var(--accent-strong);
+}
+.dialog-close-button svg { width: 18px; height: 18px; }
 .diagnostics-body { padding: 18px 20px 20px; }
+.diagnostics-dialog .diagnostics-body { min-height: 0; overflow: auto; }
 .diagnostic-character-field { display: flex; align-items: center; gap: 9px; color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
 select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--border); border-radius: 8px; background: #091522; color: var(--text); padding: 0 34px 0 10px; }
 .panel-meta { color: var(--muted); font-size: 11px; font-weight: 800; text-transform: uppercase; }
@@ -295,6 +397,10 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
 .notice.warning { background: #493c18; color: #ffe39b; }
 
 .settings-layout { display: grid; gap: 24px; }
+.settings-page {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+}
 .settings-description { max-width: 760px; margin-top: 8px; }
 .settings-scope {
     padding: 4px 8px;
@@ -307,87 +413,15 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
     letter-spacing: .04em;
 }
 
-#dashboard-order-form {
-    max-width: 900px;
-    margin-top: 18px;
-}
-
-.section-order-list {
-    display: grid;
-    gap: 8px;
-    margin: 0 0 16px;
-    padding: 0;
-    list-style: none;
-}
-
-.section-order-row {
-    display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 12px;
-    min-height: 64px;
-    padding: 10px 12px;
-    border: 1px solid var(--border-soft);
-    border-radius: 11px;
-    background: var(--panel-soft);
-}
-
-.section-order-position {
-    display: grid;
-    place-items: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: var(--panel-strong);
-    color: var(--accent-strong);
+.config-panel textarea {
+    min-height: 480px;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
     font-size: 12px;
-    font-weight: 850;
+    line-height: 1.55;
+    tab-size: 2;
 }
-
-.section-order-copy {
-    display: grid;
-    min-width: 0;
-    gap: 1px;
-}
-
-.section-order-copy > span {
-    color: var(--muted);
-    font-size: 12px;
-}
-
-.section-order-controls {
-    display: flex;
-    gap: 6px;
-}
-
-.order-button {
-    display: grid;
-    place-items: center;
-    width: 34px;
-    height: 34px;
-    padding: 0;
-    border: 1px solid var(--border);
-    background: var(--panel-strong);
-    color: var(--text);
-}
-
-.settings-section {
-    display: grid;
-    gap: 12px;
-}
-
-.settings-section-heading {
-    display: flex;
-    align-items: end;
-    justify-content: space-between;
-    gap: 24px;
-    padding: 0 2px;
-}
-
-.settings-section-heading > p {
-    max-width: 520px;
-    text-align: right;
-}
+.config-panel .button-row { margin-top: 14px; }
 
 .admin-layout { display: grid; grid-template-columns: minmax(320px, .8fr) minmax(480px, 1.2fr); gap: 20px; }
 .panel h2 { margin-top: 0; }
@@ -395,6 +429,7 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
 label:not(.diagnostic-character-field) { display: grid; gap: 6px; margin: 16px 0; }
 input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9px; background: #091522; color: var(--text); padding: 11px; }
 .connection-list { display: grid; gap: 12px; }
+.runtime-panel .connection-list { margin-top: 14px; }
 .connection-row { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); }
 .connection-row code { display: block; overflow-wrap: anywhere; color: var(--muted); margin-top: 8px; }
 .login-page { display: grid; place-items: center; padding: 24px; }
@@ -421,7 +456,6 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
 }
 
 @media (max-width: 820px) {
-    .site-header { align-items: flex-start; }
     .admin-layout { grid-template-columns: 1fr; }
 }
 
@@ -448,53 +482,9 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .card-sections { gap: 10px; margin-top: 10px; }
     .character-card .card-subpanel { padding: 11px; }
     .character-card .section-heading { margin-bottom: 8px; }
-    .diagnostics-panel { display: none; }
 }
 
 @media (max-width: 540px) {
-    .site-header { align-items: center; gap: 12px; padding: 10px 14px; }
-    .site-header h1 { font-size: 22px; }
-    .site-header-copy { display: flex; align-items: center; flex: 1; gap: 6px; min-width: 0; }
-    .site-header-copy h1 { flex: 0 0 auto; font-size: 19px; white-space: nowrap; }
-    .header-summary {
-        flex: 1;
-        flex-wrap: nowrap;
-        gap: 0;
-        min-width: 0;
-        min-height: 0;
-        margin-top: 0;
-        overflow: hidden;
-        font-size: 12px;
-    }
-    .header-summary-item { display: none; }
-    .header-summary-mobile {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        min-width: 0;
-        overflow: hidden;
-    }
-    .header-summary-mobile::before { content: "·"; flex: 0 0 auto; color: #627c92; }
-    .header-summary-mobile-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .mobile-alert-count {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        flex: 0 0 auto;
-        min-width: 18px;
-        height: 18px;
-        padding: 0 5px;
-        border: 1px solid rgba(255, 140, 155, .45);
-        border-radius: 999px;
-        background: rgba(255, 140, 155, .12);
-        color: var(--red);
-        font-size: 10px;
-        font-weight: 850;
-        line-height: 1;
-    }
-    .settings-link { width: 40px; min-height: 40px; justify-content: center; }
-    .settings-icon { font-size: 23px; }
-    .settings-label { display: none; }
     .mode-badge { font-size: 0; }
     .mode-badge::after { content: attr(data-mobile-label); font-size: 11px; }
     .slot-group[data-slot-group="drinks"] .slot-group-label { display: none; }
@@ -521,28 +511,18 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .inventory-item { gap: 7px; padding: 6px 7px; }
     .event-list { gap: 5px; }
     .event-row { gap: 8px; padding: 6px 7px; }
-    .diagnostics-panel > summary,
+    .diagnostics-dialog-header,
     .diagnostics-body { padding-left: 15px; padding-right: 15px; }
     .settings-layout { gap: 16px; }
-    .settings-layout .panel { padding: 15px; border-radius: 14px; }
+    .settings-page .panel { padding: 15px; border-radius: 14px; }
     .settings-description { margin-top: 6px; }
-    #dashboard-order-form { margin-top: 14px; }
-    .section-order-list { gap: 6px; margin-bottom: 12px; }
-    .section-order-row { min-height: 56px; padding: 8px 10px; gap: 8px; }
-    .section-order-position { width: 26px; height: 26px; }
-    .section-order-controls { gap: 4px; }
-    .order-button { width: 32px; height: 32px; }
-    .settings-section { gap: 8px; }
+    .config-panel textarea { min-height: 360px; }
     .admin-layout { gap: 12px; }
     .connection-list { gap: 8px; }
     .connection-row { gap: 10px; padding: 11px; }
-    .settings-layout label:not(.diagnostic-character-field) { gap: 5px; margin: 12px 0; }
-    .settings-layout input,
-    .settings-layout textarea { padding: 9px; }
-    .settings-layout .button-row { gap: 8px; }
+    .settings-page label:not(.diagnostic-character-field) { gap: 5px; margin: 12px 0; }
+    .settings-page input,
+    .settings-page textarea { padding: 9px; }
+    .settings-page .button-row { gap: 8px; }
     .panel-heading { align-items: flex-start; flex-direction: column; }
-    .settings-section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
-    .settings-section-heading > p { text-align: left; }
-    .section-order-row { grid-template-columns: 28px minmax(0, 1fr); }
-    .section-order-controls { grid-column: 2; }
 }

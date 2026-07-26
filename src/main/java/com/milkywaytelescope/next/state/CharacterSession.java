@@ -94,6 +94,10 @@ public final class CharacterSession {
         redactedUrl = profile.redactedUrl();
     }
 
+    public synchronized void updateInventoryWatchTerms(List<String> inventoryWatchTerms) {
+        projection.updateInventoryWatchTerms(inventoryWatchTerms);
+    }
+
     public synchronized void markConnected(long expectedGeneration) {
         if (expectedGeneration != generation) {
             return;

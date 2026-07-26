@@ -10,7 +10,7 @@
 <body>
 <header class="site-header">
     <div class="site-header-copy">
-        <h1>Telescope Next</h1>
+        <h1><a class="site-header-brand" href="/" aria-label="Telescope Next dashboard">Telescope Next</a></h1>
         <p id="monitor-summary" class="header-summary">
             <span class="header-summary-item">Waiting for monitor data</span>
             <span class="header-summary-mobile">
@@ -19,23 +19,42 @@
         </p>
     </div>
     <nav>
-        <a class="settings-link" href="/settings" aria-label="Settings">
-            <span class="settings-icon" aria-hidden="true">&#9881;&#xfe0e;</span>
-            <span class="settings-label">Settings</span>
+        <button id="diagnostics-open" class="header-action" type="button"
+                aria-label="Recent messages" title="Recent messages">
+            <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 12a9 9 0 1 0 3-6.7"></path>
+                <path d="M3 4v4h4"></path>
+                <path d="M12 7v5l3 2"></path>
+            </svg>
+        </button>
+        <a class="header-action" href="/settings" aria-label="Settings" title="Settings">
+            <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 1 0-2 3.46l.15.08a2 2 0 0 1 1 1.73v.51a2 2 0 0 1-1 1.74l-.15.08a2 2 0 1 0 2 3.46l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 1 0 2-3.46l-.15-.08a2 2 0 0 1-1-1.73v-.5a2 2 0 0 1 1-1.74l.15-.08a2 2 0 1 0-2-3.46l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+                <circle cx="12" cy="12" r="3"></circle>
+            </svg>
         </a>
     </nav>
 </header>
 <main class="page-shell">
     <section id="character-grid" class="character-grid" aria-live="polite"></section>
 
-    <details id="diagnostics" class="diagnostics-panel">
-        <summary>
-            <span>
+    <dialog id="diagnostics-dialog" class="diagnostics-dialog" aria-labelledby="diagnostics-title">
+        <header class="diagnostics-dialog-header">
+            <div>
                 <span class="eyebrow">Diagnostics</span>
-                <strong>Recent messages</strong>
-            </span>
-            <span class="muted">Open protocol trace</span>
-        </summary>
+                <h2 id="diagnostics-title">Recent messages</h2>
+            </div>
+            <button id="diagnostics-close" class="dialog-close-button" type="button"
+                    aria-label="Close recent messages" title="Close">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                     stroke-width="2" stroke-linecap="round" aria-hidden="true">
+                    <path d="M6 6l12 12"></path>
+                    <path d="M18 6L6 18"></path>
+                </svg>
+            </button>
+        </header>
         <div class="diagnostics-body">
             <div class="panel-heading">
                 <label class="diagnostic-character-field">
@@ -59,7 +78,7 @@
                 </table>
             </div>
         </div>
-    </details>
+    </dialog>
 </main>
 </body>
 </html>

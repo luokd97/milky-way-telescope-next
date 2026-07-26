@@ -2,8 +2,6 @@ package com.milkywaytelescope.next.config;
 
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "telescope")
@@ -108,7 +106,6 @@ public class TelescopeProperties {
 
     public static class Inventory {
         private int highlightLimit = 12;
-        private List<String> watchTerms = new ArrayList<>();
 
         public int getHighlightLimit() {
             return highlightLimit;
@@ -116,14 +113,6 @@ public class TelescopeProperties {
 
         public void setHighlightLimit(int highlightLimit) {
             this.highlightLimit = highlightLimit;
-        }
-
-        public List<String> getWatchTerms() {
-            return watchTerms;
-        }
-
-        public void setWatchTerms(List<String> watchTerms) {
-            this.watchTerms = watchTerms == null ? new ArrayList<>() : new ArrayList<>(watchTerms);
         }
     }
 

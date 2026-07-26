@@ -34,7 +34,6 @@ telescope:
     recent-event-limit: ${TELESCOPE_RECENT_EVENT_LIMIT:50}
   inventory:
     highlight-limit: ${TELESCOPE_INVENTORY_HIGHLIGHT_LIMIT:12}
-    watch-terms: ${TELESCOPE_INVENTORY_WATCH_TERMS:}
   wss:
     auto-connect: ${TELESCOPE_AUTO_CONNECT:false}
     auto-reconnect: true

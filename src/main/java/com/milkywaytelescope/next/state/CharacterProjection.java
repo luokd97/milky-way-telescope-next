@@ -35,7 +35,7 @@ final class CharacterProjection {
     private final String configuredCharacterId;
     private final int recentEventLimit;
     private final int inventoryHighlightLimit;
-    private final List<String> inventoryWatchTerms;
+    private List<String> inventoryWatchTerms;
     private final List<JsonNode> characterActions = new ArrayList<>();
     private final List<JsonNode> characterQuests = new ArrayList<>();
     private final Map<String, JsonNode> itemsByKey = new LinkedHashMap<>();
@@ -66,7 +66,15 @@ final class CharacterProjection {
         this.configuredCharacterId = Objects.requireNonNull(configuredCharacterId);
         this.recentEventLimit = Math.max(1, recentEventLimit);
         this.inventoryHighlightLimit = Math.max(1, inventoryHighlightLimit);
-        this.inventoryWatchTerms = inventoryWatchTerms == null
+        this.inventoryWatchTerms = normalizeInventoryWatchTerms(inventoryWatchTerms);
+    }
+
+    void updateInventoryWatchTerms(List<String> inventoryWatchTerms) {
+        this.inventoryWatchTerms = normalizeInventoryWatchTerms(inventoryWatchTerms);
+    }
+
+    private static List<String> normalizeInventoryWatchTerms(List<String> inventoryWatchTerms) {
+        return inventoryWatchTerms == null
                 ? List.of()
                 : inventoryWatchTerms.stream()
                         .filter(Objects::nonNull)

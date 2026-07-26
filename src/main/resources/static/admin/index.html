@@ -1,84 +1,68 @@
 <!doctype html>
 <html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Settings · Telescope Next</title>
     <link rel="stylesheet" href="/styles.css">
     <script src="/admin/admin.js" defer></script>
 </head>
 <body>
-<header class="site-header">
-    <div>
-        <p class="eyebrow">Telescope configuration</p>
-        <h1>Settings</h1>
+<header class="site-header settings-header">
+    <div class="site-header-copy">
+        <h1><a class="site-header-brand" href="/" aria-label="Telescope Next dashboard">Telescope Next</a></h1>
+        <span class="header-page-label">Settings</span>
     </div>
     <nav>
-        <a href="/">Dashboard</a>
+        <a class="header-action" href="/" aria-label="Dashboard" title="Dashboard">
+            <svg class="header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M3 10.5 12 3l9 7.5"></path>
+                <path d="M5 9.5V21h14V9.5"></path>
+                <path d="M9 21v-6h6v6"></path>
+            </svg>
+        </a>
     </nav>
 </header>
-<main class="page-shell settings-layout">
-    <section class="panel">
+<main class="page-shell settings-layout settings-page">
+    <section class="panel runtime-panel" aria-labelledby="connection-status-heading">
         <div class="panel-heading">
-            <div>
-                <p class="eyebrow">Dashboard</p>
-                <h2>Section order</h2>
-            </div>
-            <span class="settings-scope">All character cards</span>
+            <h2 id="connection-status-heading">Connection Status (<span id="connection-count">0</span>)</h2>
         </div>
-        <p class="muted settings-description">
-            Set the vertical order used by every character card. Changes appear on the Dashboard after saving.
-        </p>
-        <form id="dashboard-order-form">
-            <ol id="section-order-list" class="section-order-list" aria-label="Dashboard section order">
-                <li class="muted">Loading dashboard settings…</li>
-            </ol>
-            <p id="dashboard-settings-message" class="notice" hidden></p>
-            <div class="button-row">
-                <button id="save-section-order" type="submit" disabled>Save order</button>
-                <button id="restore-section-order" class="button-secondary" type="button">Restore default</button>
-            </div>
-        </form>
+        <p id="runtime-message" class="notice" hidden></p>
+        <div id="connection-list" class="connection-list"></div>
     </section>
 
-    <section class="settings-section" aria-labelledby="connections-heading">
-        <div class="settings-section-heading">
+    <section class="panel config-panel" aria-labelledby="config-heading">
+        <div class="panel-heading">
             <div>
-                <p class="eyebrow">Monitoring</p>
-                <h2 id="connections-heading">Connections</h2>
+                <p class="eyebrow">Unified configuration</p>
+                <h2 id="config-heading">Application JSON</h2>
             </div>
-            <p class="muted">Add characters and control their read-only game connections.</p>
+            <span class="settings-scope">Schema version 1</span>
         </div>
-        <div class="admin-layout">
-            <section class="panel">
-                <h2 id="form-title">Add character</h2>
-                <p class="muted">Paste the captured WSS URL and access token. Character ID is extracted automatically.</p>
-                <form id="connection-form">
-                    <input id="editing-id" type="hidden">
-                    <label>
-                        <span>WSS URL</span>
-                        <textarea id="url" rows="5" spellcheck="false" required
-                            placeholder="wss://api.milkywayidle.com/ws?hash=&lt;connection-hash&gt;&amp;characterId=&lt;character-id&gt;"></textarea>
-                    </label>
-                    <label>
-                        <span>Access token</span>
-                        <input id="access-token" type="password" autocomplete="off" required placeholder="Paste token">
-                    </label>
-                    <p id="form-message" class="notice" hidden></p>
-                    <div class="button-row">
-                        <button type="submit">Save and connect</button>
-                        <button id="cancel-edit" class="button-secondary" type="button" hidden>Cancel</button>
-                    </div>
-                </form>
-            </section>
-            <section class="panel">
-                <div class="panel-heading">
-                    <h2>Configured characters</h2>
-                    <span id="connection-count" class="muted">0</span>
-                </div>
-                <div id="connection-list" class="connection-list"></div>
-            </section>
-        </div>
+        <p class="muted settings-description">
+            This file controls Dashboard settings, connections, credentials, and persisted connection control state.
+            Changes are validated and applied atomically.
+        </p>
+        <form id="config-form">
+            <label for="config-json">
+                <span>Configuration JSON</span>
+                <textarea id="config-json" rows="30" spellcheck="false" required
+                    aria-describedby="config-help"
+                    placeholder="Loading application configuration…"></textarea>
+            </label>
+            <p id="config-help" class="muted settings-description">
+                Connection access tokens are shown here in plain text because this page is protected by the site login. Keep the file private.
+            </p>
+            <p id="config-message" class="notice" hidden></p>
+            <div class="button-row">
+                <button id="save-config" type="submit">Save configuration</button>
+                <button id="format-config" class="button-secondary" type="button">Format JSON</button>
+                <button id="load-config" class="button-secondary" type="button">Load current</button>
+                <button id="reset-config" class="button-secondary" type="button">Reset</button>
+            </div>
+        </form>
     </section>
 </main>
 <footer class="session-footer">

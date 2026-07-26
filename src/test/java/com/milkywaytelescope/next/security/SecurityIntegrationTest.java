@@ -15,7 +15,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milkywaytelescope.next.TelescopeNextApplication;
 import com.milkywaytelescope.next.connection.ConnectionProfile;
+import com.milkywaytelescope.next.settings.ApplicationConfig;
+import com.milkywaytelescope.next.settings.ApplicationConfigStore;
+import com.milkywaytelescope.next.settings.DashboardSettings;
 import com.milkywaytelescope.next.state.ConnectionRegistry;
+import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +44,9 @@ class SecurityIntegrationTest {
 
     @Autowired
     ConnectionRegistry registry;
+
+    @Autowired
+    ApplicationConfigStore configStore;
 
     @Autowired
     ObjectMapper objectMapper;
@@ -73,8 +80,8 @@ class SecurityIntegrationTest {
     }
 
     @Test
-    void protectsPersistsAndPublishesGlobalDashboardOrder() throws Exception {
-        String settingsJson = """
+    void protectsPersistsAndPublishesGlobalDashboardSettings() throws Exception {
+        String orderJson = """
                 {
                   "sectionOrder": [
                     "inventoryHighlights",
@@ -84,25 +91,147 @@ class SecurityIntegrationTest {
                   ]
                 }
                 """;
+        String watchTermsJson = """
+                {
+                  "inventoryWatchTerms": ["wisdom_tea", "coin"]
+                }
+                """;
 
         mockMvc.perform(put("/api/admin/settings/dashboard")
                         .with(user("owner").roles("OWNER"))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(settingsJson))
+                        .content(orderJson))
                 .andExpect(status().isForbidden());
 
         mockMvc.perform(put("/api/admin/settings/dashboard")
                         .with(user("owner").roles("OWNER"))
                         .with(csrf())
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(settingsJson))
+                        .content(orderJson))
                 .andExpect(status().isOk())
                 .andExpect(header().string("Cache-Control", Matchers.containsString("no-store")))
                 .andExpect(jsonPath("$.sectionOrder[0]").value("inventoryHighlights"));
 
+        mockMvc.perform(put("/api/admin/settings/dashboard")
+                        .with(user("owner").roles("OWNER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(watchTermsJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.inventoryWatchTerms[0]").value("wisdom_tea"))
+                .andExpect(jsonPath("$.inventoryWatchTerms[1]").value("coin"));
+
         mockMvc.perform(get("/api/dashboard").with(user("owner").roles("OWNER")))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.settings.sectionOrder[0]").value("inventoryHighlights"));
+                .andExpect(jsonPath("$.settings.sectionOrder[0]").value("inventoryHighlights"))
+                .andExpect(jsonPath("$.settings.inventoryWatchTerms[0]").value("wisdom_tea"));
+    }
+
+    @Test
+    void exposesFullConfigOnlyThroughAuthenticatedConfigEndpoint() throws Exception {
+        String secretHash = "full-config-secret-hash";
+        String accessToken = "full-config-secret-token";
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=" + secretHash + "&characterId=42",
+                accessToken
+        );
+        ApplicationConfig previous = configStore.current();
+        configStore.replace(new ApplicationConfig(
+                new DashboardSettings(DashboardSettings.DEFAULT_SECTION_ORDER, List.of("coin")),
+                List.of(profile),
+                List.of()
+        ));
+        try {
+            mockMvc.perform(get("/api/admin/config"))
+                    .andExpect(status().is3xxRedirection());
+
+            mockMvc.perform(get("/api/admin/config").with(user("owner").roles("OWNER")))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.schemaVersion").value(1))
+                    .andExpect(jsonPath("$.connections[0].accessToken").value(accessToken))
+                    .andExpect(jsonPath("$.connections[0].url").value(profile.url()));
+
+            String dashboard = mockMvc.perform(get("/api/dashboard").with(user("owner").roles("OWNER")))
+                    .andExpect(status().isOk())
+                    .andReturn()
+                    .getResponse()
+                    .getContentAsString();
+            assertThat(dashboard)
+                    .doesNotContain(secretHash)
+                    .doesNotContain(accessToken)
+                    .doesNotContain("connections");
+        } finally {
+            configStore.replace(previous);
+        }
+    }
+
+    @Test
+    void protectsFullConfigReplacementWithCsrf() throws Exception {
+        String configJson = """
+                {
+                  "schemaVersion": 1,
+                  "dashboard": {
+                    "sectionOrder": [
+                      "currentActivity",
+                      "inventoryHighlights",
+                      "actionQueue",
+                      "recentAlerts"
+                    ],
+                    "inventoryWatchTerms": []
+                  },
+                  "connections": [],
+                  "connectionControls": []
+                }
+                """;
+
+        mockMvc.perform(put("/api/admin/config")
+                        .with(user("owner").roles("OWNER"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(configJson))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(put("/api/admin/config")
+                        .with(user("owner").roles("OWNER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(configJson))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.schemaVersion").value(1))
+                .andExpect(jsonPath("$.connections").isEmpty());
+    }
+
+    @Test
+    void rejectsInvalidFullConfigWithoutReplacingTheRunningConfig() throws Exception {
+        ApplicationConfig previous = configStore.current();
+        String invalidConfigJson = """
+                {
+                  "schemaVersion": 1,
+                  "dashboard": {
+                    "sectionOrder": [
+                      "currentActivity",
+                      "inventoryHighlights",
+                      "actionQueue",
+                      "recentAlerts"
+                    ],
+                    "inventoryWatchTerms": []
+                  },
+                  "connections": [{
+                    "characterId": "42",
+                    "url": "https://not-a-websocket.example/ws?characterId=42",
+                    "accessToken": "sample-token"
+                  }],
+                  "connectionControls": []
+                }
+                """;
+
+        mockMvc.perform(put("/api/admin/config")
+                        .with(user("owner").roles("OWNER"))
+                        .with(csrf())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidConfigJson))
+                .andExpect(status().isBadRequest());
+
+        assertThat(configStore.current()).isEqualTo(previous);
     }
 
     @Test

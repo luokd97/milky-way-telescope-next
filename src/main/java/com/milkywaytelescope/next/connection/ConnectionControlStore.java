@@ -1,113 +1,68 @@
 package com.milkywaytelescope.next.connection;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.milkywaytelescope.next.config.TelescopeProperties;
-import jakarta.annotation.PostConstruct;
-import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.PosixFilePermissions;
+import com.milkywaytelescope.next.settings.ApplicationConfig;
+import com.milkywaytelescope.next.settings.ApplicationConfigStore;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * Compatibility facade for persisted yield state. The unified config store owns persistence.
+ */
 @Component
 public class ConnectionControlStore {
-    private static final TypeReference<List<ConnectionControlState>> STATE_LIST = new TypeReference<>() {};
+    private final ApplicationConfigStore configStore;
 
-    private final ObjectMapper objectMapper;
-    private final Path file;
-    private final Map<String, ConnectionControlState> states = new LinkedHashMap<>();
-
-    public ConnectionControlStore(ObjectMapper objectMapper, TelescopeProperties properties) {
-        this.objectMapper = objectMapper;
-        this.file = properties.getStorage().getControlFile().toAbsolutePath().normalize();
+    public ConnectionControlStore(ApplicationConfigStore configStore) {
+        this.configStore = configStore;
     }
 
-    @PostConstruct
-    synchronized void load() {
-        if (!Files.exists(file)) {
-            return;
-        }
-        try {
-            List<ConnectionControlState> loaded = objectMapper.readValue(file.toFile(), STATE_LIST);
-            states.clear();
-            for (ConnectionControlState state : loaded) {
-                if (states.putIfAbsent(state.characterId(), state) != null) {
-                    throw new IllegalStateException("Duplicate characterId in connection control store");
-                }
-            }
-        } catch (IOException | IllegalArgumentException exception) {
-            throw new IllegalStateException("Unable to load connection control states", exception);
-        }
+    public ConnectionControlState find(String characterId) {
+        return configStore.current().connectionControls().stream()
+                .filter(control -> control.characterId().equals(characterId))
+                .findFirst()
+                .orElse(null);
     }
 
-    public synchronized ConnectionControlState find(String characterId) {
-        return states.get(characterId);
+    public ConnectionControlState save(ConnectionControlState state) {
+        ApplicationConfig saved = configStore.update(current -> current.withConnectionControls(upsert(
+                current.connectionControls(),
+                state
+        )));
+        return saved.connectionControls().stream()
+                .filter(control -> control.characterId().equals(state.characterId()))
+                .findFirst()
+                .orElseThrow();
     }
 
-    public synchronized ConnectionControlState save(ConnectionControlState state) {
-        ConnectionControlState previous = states.put(state.characterId(), state);
-        try {
-            persist();
-        } catch (RuntimeException exception) {
-            restore(state.characterId(), previous);
-            throw exception;
-        }
-        return state;
-    }
-
-    public synchronized ConnectionControlState delete(String characterId) {
-        ConnectionControlState removed = states.remove(characterId);
-        if (removed != null) {
-            try {
-                persist();
-            } catch (RuntimeException exception) {
-                states.put(characterId, removed);
-                throw exception;
-            }
-        }
-        return removed;
-    }
-
-    private void restore(String characterId, ConnectionControlState previous) {
+    public ConnectionControlState delete(String characterId) {
+        ConnectionControlState previous = find(characterId);
         if (previous == null) {
-            states.remove(characterId);
-        } else {
-            states.put(characterId, previous);
+            return null;
         }
+        configStore.update(current -> current.withConnectionControls(current.connectionControls().stream()
+                .filter(control -> !control.characterId().equals(characterId))
+                .toList()));
+        return previous;
     }
 
-    private void persist() {
-        try {
-            Path parent = file.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
+    private static List<ConnectionControlState> upsert(
+            List<ConnectionControlState> existing,
+            ConnectionControlState replacement
+    ) {
+        List<ConnectionControlState> next = new ArrayList<>();
+        boolean replaced = false;
+        for (ConnectionControlState control : existing) {
+            if (control.characterId().equals(replacement.characterId())) {
+                next.add(replacement);
+                replaced = true;
+            } else {
+                next.add(control);
             }
-            Path temp = Files.createTempFile(parent, file.getFileName().toString(), ".tmp");
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(temp.toFile(), new ArrayList<>(states.values()));
-            restrictPermissions(temp);
-            try {
-                Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException ignored) {
-                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
-            }
-            restrictPermissions(file);
-        } catch (IOException exception) {
-            throw new IllegalStateException("Unable to persist connection control states", exception);
         }
-    }
-
-    private static void restrictPermissions(Path path) {
-        try {
-            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-------"));
-        } catch (UnsupportedOperationException | IOException ignored) {
-            // Non-POSIX filesystems rely on their platform ACLs.
+        if (!replaced) {
+            next.add(replacement);
         }
+        return next;
     }
 }

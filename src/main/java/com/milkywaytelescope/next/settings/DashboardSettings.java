@@ -2,9 +2,10 @@ package com.milkywaytelescope.next.settings;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 
-public record DashboardSettings(List<String> sectionOrder) {
+public record DashboardSettings(List<String> sectionOrder, List<String> inventoryWatchTerms) {
     public static final String CURRENT_ACTIVITY = "currentActivity";
     public static final String INVENTORY_HIGHLIGHTS = "inventoryHighlights";
     public static final String ACTION_QUEUE = "actionQueue";
@@ -19,6 +20,10 @@ public record DashboardSettings(List<String> sectionOrder) {
 
     private static final Set<String> AVAILABLE_SECTIONS = Set.copyOf(DEFAULT_SECTION_ORDER);
 
+    public DashboardSettings(List<String> sectionOrder) {
+        this(sectionOrder, List.of());
+    }
+
     public DashboardSettings {
         if (sectionOrder == null
                 || sectionOrder.size() != DEFAULT_SECTION_ORDER.size()
@@ -28,9 +33,17 @@ public record DashboardSettings(List<String> sectionOrder) {
             );
         }
         sectionOrder = List.copyOf(sectionOrder);
+        inventoryWatchTerms = inventoryWatchTerms == null
+                ? List.of()
+                : inventoryWatchTerms.stream()
+                        .filter(Objects::nonNull)
+                        .map(String::trim)
+                        .filter(term -> !term.isBlank())
+                        .distinct()
+                        .toList();
     }
 
     public static DashboardSettings defaults() {
-        return new DashboardSettings(DEFAULT_SECTION_ORDER);
+        return new DashboardSettings(DEFAULT_SECTION_ORDER, List.of());
     }
 }

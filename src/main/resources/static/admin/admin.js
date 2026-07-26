@@ -1,53 +1,27 @@
 let csrf;
 let connections = [];
-let sectionOrder = [];
-let savedSectionOrder = [];
-
-const DASHBOARD_SECTIONS = [
-  {
-    id: "currentActivity",
-    label: "Current Activity",
-    description: "Current action, tasks, consumables, and battle status.",
-  },
-  {
-    id: "inventoryHighlights",
-    label: "Inventory Highlights",
-    description: "Watched or highest-quantity inventory items.",
-  },
-  {
-    id: "actionQueue",
-    label: "Action Queue",
-    description: "Current and upcoming queued actions.",
-  },
-  {
-    id: "recentAlerts",
-    label: "Recent Alerts",
-    description: "Recent low-inventory events.",
-  },
-];
-const DEFAULT_SECTION_ORDER = DASHBOARD_SECTIONS.map(section => section.id);
+let currentConfigText = "";
 
 document.addEventListener("DOMContentLoaded", async () => {
-  document.getElementById("connection-form").addEventListener("submit", saveConnection);
-  document.getElementById("cancel-edit").addEventListener("click", resetForm);
-  document.getElementById("connection-list").addEventListener("click", handleAction);
-  document.getElementById("dashboard-order-form").addEventListener("submit", saveDashboardSettings);
-  document.getElementById("section-order-list").addEventListener("click", moveDashboardSection);
-  document.getElementById("restore-section-order").addEventListener("click", restoreSectionOrder);
+  document.getElementById("config-form").addEventListener("submit", saveConfig);
+  document.getElementById("format-config").addEventListener("click", formatConfig);
+  document.getElementById("load-config").addEventListener("click", loadConfig);
+  document.getElementById("reset-config").addEventListener("click", resetConfig);
+  document.getElementById("connection-list").addEventListener("click", handleRuntimeAction);
   try {
     csrf = await fetchJson("/api/security/csrf");
     attachCsrfToLogout();
-    const results = await Promise.allSettled([refreshConnections(), loadDashboardSettings()]);
+    const results = await Promise.allSettled([loadConfig(), refreshConnections()]);
     if (results[0].status === "rejected") {
-      showMessage(results[0].reason.message, true);
+      showConfigMessage(results[0].reason.message, true);
     }
     if (results[1].status === "rejected") {
-      showDashboardSettingsMessage(results[1].reason.message, true);
+      showRuntimeMessage(results[1].reason.message, true);
     }
     window.setInterval(() => refreshConnections().catch(() => {}), 2000);
   } catch (error) {
-    showMessage(error.message, true);
-    showDashboardSettingsMessage(error.message, true);
+    showConfigMessage(error.message, true);
+    showRuntimeMessage(error.message, true);
   }
 });
 
@@ -60,87 +34,67 @@ function attachCsrfToLogout() {
   form.appendChild(input);
 }
 
+async function loadConfig() {
+  const config = await fetchJson("/api/admin/config");
+  currentConfigText = JSON.stringify(config, null, 2);
+  document.getElementById("config-json").value = currentConfigText;
+  showConfigMessage("Configuration loaded.", false);
+}
+
+function formatConfig() {
+  try {
+    const config = parseConfigText();
+    document.getElementById("config-json").value = JSON.stringify(config, null, 2);
+    showConfigMessage("JSON formatted. Save configuration to apply it.", false);
+  } catch (error) {
+    showConfigMessage(error.message, true);
+  }
+}
+
+function resetConfig() {
+  document.getElementById("config-json").value = currentConfigText;
+  showConfigMessage("Unsaved changes were reset.", false);
+}
+
+async function saveConfig(event) {
+  event.preventDefault();
+  let config;
+  try {
+    config = parseConfigText();
+  } catch (error) {
+    showConfigMessage(error.message, true);
+    return;
+  }
+
+  try {
+    const saved = await mutate("/api/admin/config", "PUT", config);
+    currentConfigText = JSON.stringify(saved, null, 2);
+    document.getElementById("config-json").value = currentConfigText;
+    showConfigMessage("Configuration saved and applied.", false);
+    await refreshConnections();
+  } catch (error) {
+    showConfigMessage(error.message, true);
+  }
+}
+
+function parseConfigText() {
+  const value = document.getElementById("config-json").value.trim();
+  if (!value) {
+    throw new Error("Configuration JSON cannot be empty");
+  }
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    throw new Error(`Invalid JSON: ${error.message}`);
+  }
+}
+
 async function refreshConnections() {
   connections = await fetchJson("/api/admin/connections");
   document.getElementById("connection-count").textContent = connections.length;
   const list = document.getElementById("connection-list");
   list.innerHTML = connections.length ? connections.map(connectionRow).join("") :
     `<p class="muted">No characters configured.</p>`;
-}
-
-async function loadDashboardSettings() {
-  const settings = await fetchJson("/api/admin/settings/dashboard");
-  sectionOrder = normalizeSectionOrder(settings.sectionOrder);
-  savedSectionOrder = [...sectionOrder];
-  renderSectionOrder();
-}
-
-function renderSectionOrder() {
-  const root = document.getElementById("section-order-list");
-  root.innerHTML = sectionOrder.map((sectionId, index) => {
-    const section = DASHBOARD_SECTIONS.find(candidate => candidate.id === sectionId);
-    return `
-      <li class="section-order-row" data-section="${escapeHtml(sectionId)}">
-        <span class="section-order-position" aria-hidden="true">${index + 1}</span>
-        <span class="section-order-copy">
-          <strong>${escapeHtml(section.label)}</strong>
-          <span>${escapeHtml(section.description)}</span>
-        </span>
-        <span class="section-order-controls">
-          <button class="order-button" type="button" data-move="up"
-              aria-label="Move ${escapeHtml(section.label)} up" ${index === 0 ? "disabled" : ""}>↑</button>
-          <button class="order-button" type="button" data-move="down"
-              aria-label="Move ${escapeHtml(section.label)} down"
-              ${index === sectionOrder.length - 1 ? "disabled" : ""}>↓</button>
-        </span>
-      </li>`;
-  }).join("");
-  document.getElementById("save-section-order").disabled = arraysEqual(sectionOrder, savedSectionOrder);
-}
-
-function moveDashboardSection(event) {
-  const button = event.target.closest("button[data-move]");
-  if (!button) return;
-  const row = button.closest("[data-section]");
-  const from = sectionOrder.indexOf(row.dataset.section);
-  const to = button.dataset.move === "up" ? from - 1 : from + 1;
-  if (from < 0 || to < 0 || to >= sectionOrder.length) return;
-  [sectionOrder[from], sectionOrder[to]] = [sectionOrder[to], sectionOrder[from]];
-  renderSectionOrder();
-  document.getElementById("dashboard-settings-message").hidden = true;
-}
-
-function restoreSectionOrder() {
-  sectionOrder = [...DEFAULT_SECTION_ORDER];
-  renderSectionOrder();
-  document.getElementById("dashboard-settings-message").hidden = true;
-}
-
-async function saveDashboardSettings(event) {
-  event.preventDefault();
-  try {
-    const settings = await mutate("/api/admin/settings/dashboard", "PUT", { sectionOrder });
-    sectionOrder = normalizeSectionOrder(settings.sectionOrder);
-    savedSectionOrder = [...sectionOrder];
-    renderSectionOrder();
-    showDashboardSettingsMessage("Dashboard order saved. Character cards will update on their next refresh.", false);
-  } catch (error) {
-    showDashboardSettingsMessage(error.message, true);
-  }
-}
-
-function normalizeSectionOrder(order) {
-  if (!Array.isArray(order)
-      || order.length !== DEFAULT_SECTION_ORDER.length
-      || new Set(order).size !== DEFAULT_SECTION_ORDER.length
-      || order.some(section => !DEFAULT_SECTION_ORDER.includes(section))) {
-    return [...DEFAULT_SECTION_ORDER];
-  }
-  return [...order];
-}
-
-function arraysEqual(first, second) {
-  return first.length === second.length && first.every((value, index) => value === second[index]);
 }
 
 function connectionRow(connection) {
@@ -163,7 +117,6 @@ function connectionRow(connection) {
           </p>` : ""}
       </div>
       <div class="button-row">
-        <button class="button-secondary" data-action="edit" data-id="${escapeHtml(connection.characterId)}">Update</button>
         <button class="button-secondary" data-action="reconnect" data-id="${escapeHtml(connection.characterId)}">
           ${connection.status === "yielded" ? "Resume now" : "Reconnect"}
         </button>
@@ -171,57 +124,25 @@ function connectionRow(connection) {
           <button class="button-secondary" data-action="extend-yield" data-id="${escapeHtml(connection.characterId)}">
             Extend yield
           </button>` : ""}
-        <button class="button-danger" data-action="delete" data-id="${escapeHtml(connection.characterId)}">Delete</button>
       </div>
     </article>`;
 }
 
-async function saveConnection(event) {
-  event.preventDefault();
-  const editingId = document.getElementById("editing-id").value;
-  const payload = {
-    url: document.getElementById("url").value.trim(),
-    accessToken: document.getElementById("access-token").value.trim(),
-  };
-  const endpoint = editingId
-    ? `/api/admin/connections/${encodeURIComponent(editingId)}`
-    : "/api/admin/connections";
-  try {
-    await mutate(endpoint, editingId ? "PUT" : "POST", payload);
-    resetForm();
-    await refreshConnections();
-  } catch (error) {
-    showMessage(error.message, true);
-  }
-}
-
-async function handleAction(event) {
+async function handleRuntimeAction(event) {
   const button = event.target.closest("button[data-action]");
   if (!button) return;
   const id = button.dataset.id;
   const action = button.dataset.action;
-  if (action === "edit") {
-    document.getElementById("editing-id").value = id;
-    document.getElementById("url").value = "";
-    document.getElementById("url").placeholder = "Paste the complete replacement WSS URL";
-    document.getElementById("access-token").value = "";
-    document.getElementById("form-title").textContent = `Update character ${id}`;
-    document.getElementById("cancel-edit").hidden = false;
-    document.getElementById("url").focus();
-    return;
-  }
-  if (action === "delete" && !window.confirm(`Delete character ${id}?`)) return;
   try {
     if (action === "reconnect") {
       await mutate(`/api/admin/connections/${encodeURIComponent(id)}/reconnect`, "POST");
     } else if (action === "extend-yield") {
       await mutate(`/api/admin/connections/${encodeURIComponent(id)}/yield/extend`, "POST");
-    } else if (action === "delete") {
-      await mutate(`/api/admin/connections/${encodeURIComponent(id)}`, "DELETE");
     }
     await refreshConnections();
+    showRuntimeMessage("Runtime action accepted.", false);
   } catch (error) {
-    showMessage(error.message, true);
+    showRuntimeMessage(error.message, true);
   }
 }
 
@@ -241,14 +162,6 @@ function statusClass(status) {
   return "disconnected";
 }
 
-function resetForm() {
-  document.getElementById("connection-form").reset();
-  document.getElementById("editing-id").value = "";
-  document.getElementById("form-title").textContent = "Add character";
-  document.getElementById("cancel-edit").hidden = true;
-  document.getElementById("form-message").hidden = true;
-}
-
 async function mutate(url, method, body) {
   const response = await fetch(url, {
     method,
@@ -263,7 +176,7 @@ async function mutate(url, method, body) {
     let message = `HTTP ${response.status}`;
     try {
       const payload = await response.json();
-      message = payload.message || payload.detail || message;
+      message = payload.message || payload.detail || payload.error || message;
     } catch {}
     throw new Error(message);
   }
@@ -276,15 +189,15 @@ async function fetchJson(url) {
   return response.json();
 }
 
-function showMessage(message, error) {
-  const root = document.getElementById("form-message");
+function showConfigMessage(message, error) {
+  const root = document.getElementById("config-message");
   root.textContent = message;
   root.className = `notice${error ? " error" : ""}`;
   root.hidden = false;
 }
 
-function showDashboardSettingsMessage(message, error) {
-  const root = document.getElementById("dashboard-settings-message");
+function showRuntimeMessage(message, error) {
+  const root = document.getElementById("runtime-message");
   root.textContent = message;
   root.className = `notice${error ? " error" : ""}`;
   root.hidden = false;

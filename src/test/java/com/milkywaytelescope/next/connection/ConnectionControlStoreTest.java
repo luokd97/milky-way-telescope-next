@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milkywaytelescope.next.config.TelescopeProperties;
+import com.milkywaytelescope.next.settings.ApplicationConfigStore;
 import java.nio.file.Path;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
@@ -16,8 +17,9 @@ class ConnectionControlStoreTest {
     @Test
     void persistsYieldAcrossApplicationRestartsAndCanClearIt() {
         TelescopeProperties properties = new TelescopeProperties();
-        Path controlFile = tempDir.resolve("connection-control.json");
-        properties.getStorage().setControlFile(controlFile);
+        properties.getStorage().setSettingsFile(tempDir.resolve("settings.json"));
+        properties.getStorage().setConnectionFile(tempDir.resolve("connections.json"));
+        properties.getStorage().setControlFile(tempDir.resolve("connection-control.json"));
         ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         ConnectionControlState state = new ConnectionControlState(
                 "42",
@@ -26,17 +28,20 @@ class ConnectionControlStoreTest {
                 "another device"
         );
 
-        ConnectionControlStore store = new ConnectionControlStore(objectMapper, properties);
-        store.load();
+        ApplicationConfigStore configStore = new ApplicationConfigStore(objectMapper, properties);
+        configStore.load();
+        ConnectionControlStore store = new ConnectionControlStore(configStore);
         store.save(state);
 
-        ConnectionControlStore reloaded = new ConnectionControlStore(objectMapper, properties);
-        reloaded.load();
+        ApplicationConfigStore reloadedConfig = new ApplicationConfigStore(objectMapper, properties);
+        reloadedConfig.load();
+        ConnectionControlStore reloaded = new ConnectionControlStore(reloadedConfig);
         assertThat(reloaded.find("42")).isEqualTo(state);
 
         reloaded.delete("42");
-        ConnectionControlStore cleared = new ConnectionControlStore(objectMapper, properties);
-        cleared.load();
+        ApplicationConfigStore clearedConfig = new ApplicationConfigStore(objectMapper, properties);
+        clearedConfig.load();
+        ConnectionControlStore cleared = new ConnectionControlStore(clearedConfig);
         assertThat(cleared.find("42")).isNull();
     }
 }

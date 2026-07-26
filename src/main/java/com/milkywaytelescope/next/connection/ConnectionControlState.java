@@ -18,6 +18,9 @@ public record ConnectionControlState(
         if (resumeAt == null) {
             throw new IllegalArgumentException("resumeAt is required");
         }
+        if (!resumeAt.isAfter(yieldedAt)) {
+            throw new IllegalArgumentException("resumeAt must be after yieldedAt");
+        }
         reason = reason == null || reason.isBlank() ? "Another game session was opened" : reason;
     }
 }

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milkywaytelescope.next.connection.ConnectionProfile;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CharacterSessionTest {
@@ -154,5 +155,31 @@ class CharacterSessionTest {
 
         session.markClosed(secondGeneration, 1000, "closed");
         assertThat(session.snapshot(0, false).dataStatus()).isEqualTo("stale");
+    }
+
+    @Test
+    void updatesInventoryWatchTermsForAnExistingSession() {
+        CharacterSession session = new CharacterSession("7", new ObjectMapper(), 100, 4096);
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=7",
+                "sample-token"
+        );
+        long generation = session.beginGeneration(profile);
+        session.recordText(generation, """
+                {
+                  "type": "init_character_data",
+                  "character": {"id": 7, "name": "Observer"},
+                  "characterItems": [
+                    {"hash": "tea", "itemHrid": "/items/wisdom_tea", "count": 10},
+                    {"hash": "coin", "itemHrid": "/items/coin", "count": 100}
+                  ]
+                }
+                """);
+
+        session.updateInventoryWatchTerms(List.of("tea"));
+
+        assertThat(session.snapshot(0, false).inventoryHighlights())
+                .extracting(CharacterSession.ItemView::label)
+                .containsExactly("Wisdom Tea");
     }
 }

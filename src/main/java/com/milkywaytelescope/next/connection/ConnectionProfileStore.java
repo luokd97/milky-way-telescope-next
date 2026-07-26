@@ -1,137 +1,97 @@
 package com.milkywaytelescope.next.connection;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.milkywaytelescope.next.config.TelescopeProperties;
-import jakarta.annotation.PostConstruct;
-import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.nio.file.attribute.PosixFilePermissions;
+import com.milkywaytelescope.next.settings.ApplicationConfig;
+import com.milkywaytelescope.next.settings.ApplicationConfigStore;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/**
+ * Compatibility facade for connection CRUD. The unified config store owns persistence.
+ */
 @Component
 public class ConnectionProfileStore {
-    private static final TypeReference<List<ConnectionProfile>> PROFILE_LIST = new TypeReference<>() {};
+    private final ApplicationConfigStore configStore;
 
-    private final ObjectMapper objectMapper;
-    private final Path file;
-    private final Map<String, ConnectionProfile> profiles = new LinkedHashMap<>();
-
-    public ConnectionProfileStore(ObjectMapper objectMapper, TelescopeProperties properties) {
-        this.objectMapper = objectMapper;
-        this.file = properties.getStorage().getConnectionFile().toAbsolutePath().normalize();
+    public ConnectionProfileStore(ApplicationConfigStore configStore) {
+        this.configStore = configStore;
     }
 
-    @PostConstruct
-    synchronized void load() {
-        if (!Files.exists(file)) {
-            return;
-        }
-        try {
-            List<ConnectionProfile> loaded = objectMapper.readValue(file.toFile(), PROFILE_LIST);
-            profiles.clear();
-            for (ConnectionProfile profile : loaded) {
-                ConnectionProfile validated = ConnectionProfile.from(profile.url(), profile.accessToken());
-                if (profiles.putIfAbsent(validated.characterId(), validated) != null) {
-                    throw new IllegalStateException("Duplicate characterId in connection store");
-                }
-            }
-        } catch (IOException | IllegalArgumentException exception) {
-            throw new IllegalStateException("Unable to load connection profiles", exception);
-        }
+    public List<ConnectionProfile> findAll() {
+        return configStore.current().connections();
     }
 
-    public synchronized List<ConnectionProfile> findAll() {
-        return List.copyOf(profiles.values());
+    public ConnectionProfile find(String characterId) {
+        return findAll().stream()
+                .filter(profile -> profile.characterId().equals(characterId))
+                .findFirst()
+                .orElse(null);
     }
 
-    public synchronized ConnectionProfile find(String characterId) {
-        return profiles.get(characterId);
-    }
-
-    public synchronized ConnectionProfile save(String url, String accessToken) {
+    public ConnectionProfile save(String url, String accessToken) {
         ConnectionProfile profile = ConnectionProfile.from(url, accessToken);
-        ConnectionProfile previous = profiles.put(profile.characterId(), profile);
-        try {
-            persist();
-        } catch (RuntimeException exception) {
-            restore(profile.characterId(), previous);
-            throw exception;
-        }
-        return profile;
+        ApplicationConfig saved = configStore.update(current -> current.withConnections(upsert(
+                current.connections(),
+                profile
+        )));
+        return find(saved, profile.characterId());
     }
 
-    public synchronized ConnectionProfile update(String expectedCharacterId, String url, String accessToken) {
-        if (!profiles.containsKey(expectedCharacterId)) {
+    public ConnectionProfile update(String expectedCharacterId, String url, String accessToken) {
+        ConnectionProfile existing = find(expectedCharacterId);
+        if (existing == null) {
             return null;
         }
         ConnectionProfile profile = ConnectionProfile.from(url, accessToken);
         if (!expectedCharacterId.equals(profile.characterId())) {
             throw new IllegalArgumentException("The URL characterId cannot be changed");
         }
-        ConnectionProfile previous = profiles.put(expectedCharacterId, profile);
-        try {
-            persist();
-        } catch (RuntimeException exception) {
-            restore(expectedCharacterId, previous);
-            throw exception;
-        }
-        return profile;
+        ApplicationConfig saved = configStore.update(current -> current.withConnections(upsert(
+                current.connections(),
+                profile
+        )));
+        return find(saved, profile.characterId());
     }
 
-    public synchronized ConnectionProfile delete(String characterId) {
-        ConnectionProfile removed = profiles.remove(characterId);
-        if (removed != null) {
-            try {
-                persist();
-            } catch (RuntimeException exception) {
-                profiles.put(characterId, removed);
-                throw exception;
-            }
+    public ConnectionProfile delete(String characterId) {
+        ConnectionProfile removed = find(characterId);
+        if (removed == null) {
+            return null;
         }
+        configStore.update(current -> current
+                .withConnections(current.connections().stream()
+                        .filter(profile -> !profile.characterId().equals(characterId))
+                        .toList())
+                .withConnectionControls(current.connectionControls().stream()
+                        .filter(control -> !control.characterId().equals(characterId))
+                        .toList()));
         return removed;
     }
 
-    private void restore(String characterId, ConnectionProfile previous) {
-        if (previous == null) {
-            profiles.remove(characterId);
-        } else {
-            profiles.put(characterId, previous);
+    private static List<ConnectionProfile> upsert(
+            List<ConnectionProfile> existing,
+            ConnectionProfile replacement
+    ) {
+        List<ConnectionProfile> next = new ArrayList<>();
+        boolean replaced = false;
+        for (ConnectionProfile profile : existing) {
+            if (profile.characterId().equals(replacement.characterId())) {
+                next.add(replacement);
+                replaced = true;
+            } else {
+                next.add(profile);
+            }
         }
+        if (!replaced) {
+            next.add(replacement);
+        }
+        return next;
     }
 
-    private void persist() {
-        try {
-            Path parent = file.getParent();
-            if (parent != null) {
-                Files.createDirectories(parent);
-            }
-            Path temp = Files.createTempFile(parent, file.getFileName().toString(), ".tmp");
-            objectMapper.writerWithDefaultPrettyPrinter().writeValue(temp.toFile(), new ArrayList<>(profiles.values()));
-            restrictPermissions(temp);
-            try {
-                Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException ignored) {
-                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
-            }
-            restrictPermissions(file);
-        } catch (IOException exception) {
-            throw new IllegalStateException("Unable to persist connection profiles", exception);
-        }
-    }
-
-    private static void restrictPermissions(Path path) {
-        try {
-            Files.setPosixFilePermissions(path, PosixFilePermissions.fromString("rw-------"));
-        } catch (UnsupportedOperationException | IOException ignored) {
-            // Non-POSIX filesystems rely on their platform ACLs.
-        }
+    private static ConnectionProfile find(ApplicationConfig config, String characterId) {
+        return config.connections().stream()
+                .filter(profile -> profile.characterId().equals(characterId))
+                .findFirst()
+                .orElse(null);
     }
 }

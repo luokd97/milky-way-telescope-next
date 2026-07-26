@@ -13,6 +13,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -81,6 +82,56 @@ public class WssConnectionManager {
                 ManagedConnection::new
         );
         connection.reconnect(profile);
+    }
+
+    public void reconcile(
+            List<ConnectionProfile> desiredProfiles,
+            List<ConnectionControlState> desiredControls
+    ) {
+        Map<String, ConnectionProfile> profilesById = desiredProfiles.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        ConnectionProfile::characterId,
+                        profile -> profile,
+                        (left, right) -> right
+                ));
+        Map<String, ConnectionControlState> controlsById = desiredControls.stream()
+                .collect(java.util.stream.Collectors.toMap(
+                        ConnectionControlState::characterId,
+                        control -> control,
+                        (left, right) -> right
+                ));
+
+        Set<String> removedIds = connections.keySet().stream()
+                .filter(characterId -> !profilesById.containsKey(characterId))
+                .collect(java.util.stream.Collectors.toSet());
+        removedIds.forEach(this::remove);
+
+        profilesById.forEach((characterId, profile) -> {
+            ManagedConnection connection = connections.computeIfAbsent(
+                    characterId,
+                    ManagedConnection::new
+            );
+            ConnectionProfile previous = connection.profile.getAndSet(profile);
+            if (previous == null || !previous.equals(profile)) {
+                connection.reconnect(profile);
+            }
+
+            ConnectionControlState control = controlsById.get(characterId);
+            if (control != null && control.resumeAt().isAfter(Instant.now())) {
+                CharacterSession session = registry.getOrCreate(profile);
+                connection.restoreYield(control, session);
+                controlStore.save(control);
+            } else {
+                boolean wasYielded = connection.isYielded();
+                connection.clearYield();
+                if (wasYielded) {
+                    connection.connect(profile);
+                }
+                if (control != null) {
+                    controlStore.delete(characterId);
+                }
+            }
+        });
     }
 
     public boolean reconnect(String characterId) {
@@ -231,9 +282,16 @@ public class WssConnectionManager {
                 CharacterSession session
         ) {
             desiredState = DesiredState.YIELDED;
+            cancelPendingReconnect();
+            cancelPendingResume();
             resumeAt = control.resumeAt();
             session.restoreYielded(control.yieldedAt(), control.resumeAt(), control.reason());
             scheduleResume(control.resumeAt());
+            close("configuration yielded");
+        }
+
+        private synchronized boolean isYielded() {
+            return desiredState == DesiredState.YIELDED;
         }
 
         private synchronized void yieldToRemoteSession(long expectedGeneration, String reason) {
