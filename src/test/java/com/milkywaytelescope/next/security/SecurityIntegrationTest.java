@@ -90,7 +90,7 @@ class SecurityIntegrationTest {
     void disconnectPreservesProfileAndReconnectClearsDisabledState() throws Exception {
         String characterId = "73001";
         ConnectionProfile profile = ConnectionProfile.from(
-                "wss://api.milkywayidle.com/ws?hash=disconnect-secret&characterId=" + characterId,
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=" + characterId,
                 "disconnect-token"
         );
         ApplicationConfig previous = configStore.current();
