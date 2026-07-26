@@ -10,12 +10,14 @@ import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.ByteBuffer;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -30,6 +32,7 @@ public class WssConnectionManager {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(30);
 
     private final ConnectionProfileStore profileStore;
+    private final ConnectionControlStore controlStore;
     private final ConnectionRegistry registry;
     private final TelescopeProperties properties;
     private final HttpClient httpClient;
@@ -38,10 +41,12 @@ public class WssConnectionManager {
 
     public WssConnectionManager(
             ConnectionProfileStore profileStore,
+            ConnectionControlStore controlStore,
             ConnectionRegistry registry,
             TelescopeProperties properties
     ) {
         this.profileStore = profileStore;
+        this.controlStore = controlStore;
         this.registry = registry;
         this.properties = properties;
         this.httpClient = HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
@@ -55,8 +60,15 @@ public class WssConnectionManager {
     @PostConstruct
     void initialize() {
         for (ConnectionProfile profile : profileStore.findAll()) {
-            registry.getOrCreate(profile);
-            connections.computeIfAbsent(profile.characterId(), ManagedConnection::new).profile.set(profile);
+            CharacterSession session = registry.getOrCreate(profile);
+            ManagedConnection connection = connections.computeIfAbsent(profile.characterId(), ManagedConnection::new);
+            connection.profile.set(profile);
+            ConnectionControlState control = controlStore.find(profile.characterId());
+            if (control != null && control.resumeAt().isAfter(Instant.now())) {
+                connection.restoreYield(control, session);
+            } else if (control != null) {
+                controlStore.delete(profile.characterId());
+            }
         }
         if (properties.getWss().isAutoConnect()) {
             profileStore.findAll().forEach(this::connect);
@@ -76,8 +88,14 @@ public class WssConnectionManager {
         if (profile == null) {
             return false;
         }
-        connections.computeIfAbsent(characterId, ManagedConnection::new).reconnect(profile);
+        connections.computeIfAbsent(characterId, ManagedConnection::new).resumeAndReconnect(profile);
         return true;
+    }
+
+    public boolean extendYield(String characterId) {
+        ConnectionProfile profile = profileStore.find(characterId);
+        ManagedConnection connection = connections.get(characterId);
+        return profile != null && connection != null && connection.extendYield();
     }
 
     public void remove(String characterId) {
@@ -85,6 +103,7 @@ public class WssConnectionManager {
         if (connection != null) {
             connection.close("configuration removed");
         }
+        controlStore.delete(characterId);
         registry.remove(characterId);
     }
 
@@ -105,7 +124,10 @@ public class WssConnectionManager {
         private final AtomicReference<ConnectionProfile> profile = new AtomicReference<>();
         private final AtomicReference<WebSocket> socket = new AtomicReference<>();
         private final AtomicBoolean connecting = new AtomicBoolean();
-        private final AtomicBoolean reconnectScheduled = new AtomicBoolean();
+        private ScheduledFuture<?> pendingReconnect;
+        private ScheduledFuture<?> pendingResume;
+        private DesiredState desiredState = DesiredState.RUNNING;
+        private Instant resumeAt;
         private volatile long generation;
 
         private ManagedConnection(String characterId) {
@@ -114,10 +136,14 @@ public class WssConnectionManager {
 
         private void connect(ConnectionProfile nextProfile) {
             profile.set(nextProfile);
-            if (!connecting.compareAndSet(false, true)) {
-                return;
+            synchronized (this) {
+                if (desiredState != DesiredState.RUNNING
+                        || socket.get() != null
+                        || !connecting.compareAndSet(false, true)) {
+                    return;
+                }
+                cancelPendingReconnect();
             }
-            reconnectScheduled.set(false);
             CharacterSession session = registry.getOrCreate(nextProfile);
             generation = session.beginGeneration(nextProfile);
             long connectingGeneration = generation;
@@ -137,6 +163,7 @@ public class WssConnectionManager {
                         ConnectionProfile requestedProfile = profile.get();
                         if (!nextProfile.equals(requestedProfile)) {
                             if (webSocket != null) {
+                                socket.compareAndSet(webSocket, null);
                                 webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "configuration superseded");
                             }
                             if (requestedProfile != null) {
@@ -149,9 +176,10 @@ public class WssConnectionManager {
                             log.warn("WSS connection failed for character {}", characterId);
                             scheduleReconnect();
                         } else {
-                            if (generation == connectingGeneration) {
-                                socket.set(webSocket);
+                            if (registerSocket(webSocket, connectingGeneration)) {
+                                // onOpen normally registers first; this also covers provider ordering.
                             } else {
+                                socket.compareAndSet(webSocket, null);
                                 webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "superseded");
                             }
                         }
@@ -159,7 +187,14 @@ public class WssConnectionManager {
         }
 
         private void reconnect(ConnectionProfile nextProfile) {
+            clearYield();
             close("configuration updated");
+            connect(nextProfile);
+        }
+
+        private void resumeAndReconnect(ConnectionProfile nextProfile) {
+            clearYield();
+            close("manual reconnect");
             connect(nextProfile);
         }
 
@@ -170,18 +205,157 @@ public class WssConnectionManager {
             }
         }
 
-        private void scheduleReconnect() {
-            if (!properties.getWss().isAutoReconnect() || !reconnectScheduled.compareAndSet(false, true)) {
+        private synchronized void scheduleReconnect() {
+            if (!properties.getWss().isAutoReconnect()
+                    || desiredState != DesiredState.RUNNING
+                    || pendingReconnect != null) {
                 return;
             }
             long delayMillis = Math.max(1, properties.getWss().getReconnectDelay().toMillis());
-            scheduler.schedule(() -> {
-                reconnectScheduled.set(false);
+            pendingReconnect = scheduler.schedule(() -> {
+                synchronized (ManagedConnection.this) {
+                    pendingReconnect = null;
+                    if (desiredState != DesiredState.RUNNING) {
+                        return;
+                    }
+                }
                 ConnectionProfile current = profile.get();
                 if (current != null && profileStore.find(characterId) != null) {
                     connect(current);
                 }
             }, delayMillis, TimeUnit.MILLISECONDS);
+        }
+
+        private synchronized void restoreYield(
+                ConnectionControlState control,
+                CharacterSession session
+        ) {
+            desiredState = DesiredState.YIELDED;
+            resumeAt = control.resumeAt();
+            session.restoreYielded(control.yieldedAt(), control.resumeAt(), control.reason());
+            scheduleResume(control.resumeAt());
+        }
+
+        private synchronized void yieldToRemoteSession(long expectedGeneration, String reason) {
+            if (expectedGeneration != generation) {
+                return;
+            }
+            Instant yieldedAt = Instant.now();
+            Instant nextResumeAt = yieldedAt.plus(properties.getWss().getTakeoverYieldDuration());
+            ConnectionControlState control = new ConnectionControlState(
+                    characterId,
+                    yieldedAt,
+                    nextResumeAt,
+                    reason
+            );
+            desiredState = DesiredState.YIELDED;
+            resumeAt = nextResumeAt;
+            cancelPendingReconnect();
+            cancelPendingResume();
+            CharacterSession session = registry.get(characterId);
+            if (session != null) {
+                session.markYielded(expectedGeneration, yieldedAt, nextResumeAt, reason);
+            }
+            try {
+                controlStore.save(control);
+            } catch (RuntimeException exception) {
+                log.error("Unable to persist takeover yield for character {}", characterId, exception);
+            }
+            scheduleResume(nextResumeAt);
+            close("yielding to another game session");
+            log.info("Yielding character {} until {} because another game session was opened",
+                    characterId, nextResumeAt);
+        }
+
+        private synchronized boolean extendYield() {
+            if (desiredState != DesiredState.YIELDED) {
+                return false;
+            }
+            Instant yieldedAt = Instant.now();
+            Instant nextResumeAt = yieldedAt.plus(properties.getWss().getTakeoverYieldDuration());
+            ConnectionControlState control = new ConnectionControlState(
+                    characterId,
+                    yieldedAt,
+                    nextResumeAt,
+                    "Yield extended by the administrator"
+            );
+            controlStore.save(control);
+            resumeAt = nextResumeAt;
+            cancelPendingResume();
+            CharacterSession session = registry.get(characterId);
+            if (session != null) {
+                session.restoreYielded(control.yieldedAt(), control.resumeAt(), control.reason());
+            }
+            scheduleResume(nextResumeAt);
+            return true;
+        }
+
+        private synchronized void scheduleResume(Instant expectedResumeAt) {
+            long delayMillis = Math.max(1, Duration.between(Instant.now(), expectedResumeAt).toMillis());
+            pendingResume = scheduler.schedule(() -> resumeAfterYield(expectedResumeAt),
+                    delayMillis, TimeUnit.MILLISECONDS);
+        }
+
+        private void resumeAfterYield(Instant expectedResumeAt) {
+            ConnectionProfile current;
+            synchronized (this) {
+                pendingResume = null;
+                if (desiredState != DesiredState.YIELDED || !expectedResumeAt.equals(resumeAt)) {
+                    return;
+                }
+                try {
+                    controlStore.delete(characterId);
+                } catch (RuntimeException exception) {
+                    log.error("Unable to clear takeover yield for character {}", characterId, exception);
+                    pendingResume = scheduler.schedule(
+                            () -> resumeAfterYield(expectedResumeAt),
+                            60,
+                            TimeUnit.SECONDS
+                    );
+                    return;
+                }
+                desiredState = DesiredState.RUNNING;
+                resumeAt = null;
+                current = profile.get();
+            }
+            log.info("Automatically resuming character {} after takeover yield", characterId);
+            if (current != null && profileStore.find(characterId) != null) {
+                connect(current);
+            }
+        }
+
+        private synchronized void clearYield() {
+            controlStore.delete(characterId);
+            desiredState = DesiredState.RUNNING;
+            resumeAt = null;
+            cancelPendingResume();
+            cancelPendingReconnect();
+        }
+
+        private synchronized void cancelPendingReconnect() {
+            if (pendingReconnect != null) {
+                pendingReconnect.cancel(false);
+                pendingReconnect = null;
+            }
+        }
+
+        private synchronized void cancelPendingResume() {
+            if (pendingResume != null) {
+                pendingResume.cancel(false);
+                pendingResume = null;
+            }
+        }
+
+        private synchronized boolean shouldReconnect() {
+            return desiredState == DesiredState.RUNNING;
+        }
+
+        private synchronized boolean registerSocket(WebSocket webSocket, long expectedGeneration) {
+            if (desiredState != DesiredState.RUNNING || generation != expectedGeneration) {
+                return false;
+            }
+            socket.set(webSocket);
+            return true;
         }
     }
 
@@ -198,7 +372,10 @@ public class WssConnectionManager {
 
         @Override
         public void onOpen(WebSocket webSocket) {
-            connection.socket.set(webSocket);
+            if (!connection.registerSocket(webSocket, generation)) {
+                webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "connection no longer desired");
+                return;
+            }
             CharacterSession session = registry.get(connection.characterId);
             if (session != null) {
                 session.markConnected(generation);
@@ -212,7 +389,10 @@ public class WssConnectionManager {
             if (last) {
                 CharacterSession session = registry.get(connection.characterId);
                 if (session != null) {
-                    session.recordText(generation, textBuffer.toString());
+                    var result = session.recordText(generation, textBuffer.toString());
+                    if (result.shouldYield()) {
+                        connection.yieldToRemoteSession(generation, result.reason());
+                    }
                 }
                 textBuffer.setLength(0);
             }
@@ -243,7 +423,9 @@ public class WssConnectionManager {
                 if (session != null) {
                     session.markClosed(generation, statusCode, reason);
                 }
-                connection.scheduleReconnect();
+                if (connection.shouldReconnect()) {
+                    connection.scheduleReconnect();
+                }
             }
             return null;
         }
@@ -255,8 +437,15 @@ public class WssConnectionManager {
                 if (session != null) {
                     session.markError(generation, error);
                 }
-                connection.scheduleReconnect();
+                if (connection.shouldReconnect()) {
+                    connection.scheduleReconnect();
+                }
             }
         }
+    }
+
+    private enum DesiredState {
+        RUNNING,
+        YIELDED
     }
 }

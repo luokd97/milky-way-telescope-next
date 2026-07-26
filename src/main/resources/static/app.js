@@ -42,7 +42,9 @@ function characterCard(snapshot) {
   const connection = snapshot.connection || {};
   const character = snapshot.character || {};
   const messages = snapshot.recentMessages || [];
-  const statusClass = connection.connected ? "connected" : "disconnected";
+  const statusClass = connection.status === "yielded"
+    ? "yielded"
+    : connection.connected ? "connected" : "disconnected";
   return `
     <article class="character-card">
       <header>
@@ -58,6 +60,11 @@ function characterCard(snapshot) {
         <div><dt>Mode</dt><dd>${escapeHtml(character.gameMode || "-")}</dd></div>
       </dl>
       ${connection.error ? `<p class="notice error">${escapeHtml(connection.error)}</p>` : ""}
+      ${connection.status === "yielded" ? `
+        <p class="notice">
+          Monitoring yielded because another game session was opened.
+          Automatic resume ${escapeHtml(formatResume(connection.resumeAt))}.
+        </p>` : ""}
       <div class="message-list">
         ${messages.length ? messages.map(message => `
           <div class="message-row">
@@ -95,6 +102,16 @@ function formatTime(value) {
 
 function formatNumber(value) {
   return Number(value || 0).toLocaleString();
+}
+
+function formatResume(value) {
+  if (!value) return "after manual resume";
+  const remaining = Math.max(0, new Date(value).getTime() - Date.now());
+  const minutes = Math.ceil(remaining / 60000);
+  if (minutes < 60) return `in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `in ${hours}h${rest ? ` ${rest}m` : ""}`;
 }
 
 function escapeHtml(value) {

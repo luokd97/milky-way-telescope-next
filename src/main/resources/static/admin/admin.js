@@ -28,16 +28,27 @@ function connectionRow(connection) {
       <div>
         <div class="connection-title">
           <strong>Character ${escapeHtml(connection.characterId)}</strong>
-          <span class="status ${connection.status === "connected" ? "connected" : "disconnected"}">
+          <span class="status ${statusClass(connection.status)}">
             ${escapeHtml(connection.status)}
           </span>
         </div>
         <code>${escapeHtml(connection.redactedUrl)}</code>
         ${connection.error ? `<p class="notice error">${escapeHtml(connection.error)}</p>` : ""}
+        ${connection.status === "yielded" ? `
+          <p class="notice">
+            ${escapeHtml(connection.yieldReason || "Another game session was opened.")}
+            Automatic resume ${escapeHtml(formatResume(connection.resumeAt))}.
+          </p>` : ""}
       </div>
       <div class="button-row">
         <button class="button-secondary" data-action="edit" data-id="${escapeHtml(connection.characterId)}">Update</button>
-        <button class="button-secondary" data-action="reconnect" data-id="${escapeHtml(connection.characterId)}">Reconnect</button>
+        <button class="button-secondary" data-action="reconnect" data-id="${escapeHtml(connection.characterId)}">
+          ${connection.status === "yielded" ? "Resume now" : "Reconnect"}
+        </button>
+        ${connection.status === "yielded" ? `
+          <button class="button-secondary" data-action="extend-yield" data-id="${escapeHtml(connection.characterId)}">
+            Extend yield
+          </button>` : ""}
         <button class="button-danger" data-action="delete" data-id="${escapeHtml(connection.characterId)}">Delete</button>
       </div>
     </article>`;
@@ -81,6 +92,8 @@ async function handleAction(event) {
   try {
     if (action === "reconnect") {
       await mutate(`/api/admin/connections/${encodeURIComponent(id)}/reconnect`, "POST");
+    } else if (action === "extend-yield") {
+      await mutate(`/api/admin/connections/${encodeURIComponent(id)}/yield/extend`, "POST");
     } else if (action === "delete") {
       await mutate(`/api/admin/connections/${encodeURIComponent(id)}`, "DELETE");
     }
@@ -88,6 +101,22 @@ async function handleAction(event) {
   } catch (error) {
     showMessage(error.message, true);
   }
+}
+
+function formatResume(value) {
+  if (!value) return "after manual resume";
+  const remaining = Math.max(0, new Date(value).getTime() - Date.now());
+  const minutes = Math.ceil(remaining / 60000);
+  if (minutes < 60) return `in ${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `in ${hours}h${rest ? ` ${rest}m` : ""}`;
+}
+
+function statusClass(status) {
+  if (status === "connected") return "connected";
+  if (status === "yielded") return "yielded";
+  return "disconnected";
 }
 
 function resetForm() {

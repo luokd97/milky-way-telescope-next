@@ -82,6 +82,17 @@ public class AdminConnectionController {
         return ResponseEntity.accepted().build();
     }
 
+    @PostMapping("/{characterId}/yield/extend")
+    public ResponseEntity<Void> extendYield(@PathVariable String characterId) {
+        if (profileStore.find(characterId) == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Connection not found");
+        }
+        if (!connectionManager.extendYield(characterId)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Connection is not yielded");
+        }
+        return ResponseEntity.accepted().build();
+    }
+
     private ConnectionView view(ConnectionProfile profile) {
         var session = registry.get(profile.characterId());
         var snapshot = session == null ? null : session.snapshot(0, false);
@@ -90,7 +101,10 @@ public class AdminConnectionController {
                 profile.redactedUrl(),
                 true,
                 snapshot == null ? "idle" : snapshot.connection().status(),
-                snapshot == null ? null : snapshot.connection().error()
+                snapshot == null ? null : snapshot.connection().error(),
+                snapshot == null ? null : snapshot.connection().yieldedAt(),
+                snapshot == null ? null : snapshot.connection().resumeAt(),
+                snapshot == null ? null : snapshot.connection().yieldReason()
         );
     }
 
@@ -102,7 +116,10 @@ public class AdminConnectionController {
             String redactedUrl,
             boolean hasAccessToken,
             String status,
-            String error
+            String error,
+            java.time.Instant yieldedAt,
+            java.time.Instant resumeAt,
+            String yieldReason
     ) {
     }
 }
