@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Connections · Telescope Next</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/admin/admin.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+    <div>
+        <p class="eyebrow">Administration</p>
+        <h1>Connections</h1>
+    </div>
+    <nav><a href="/">Dashboard</a></nav>
+</header>
+<main class="page-shell admin-layout">
+    <section class="panel">
+        <h2 id="form-title">Add character</h2>
+        <p class="muted">Paste the captured WSS URL and access token. Character ID is extracted automatically.</p>
+        <form id="connection-form">
+            <input id="editing-id" type="hidden">
+            <label>
+                <span>WSS URL</span>
+                <textarea id="url" rows="5" spellcheck="false" required
+                    placeholder="wss://api.milkywayidle.com/ws?hash=&lt;connection-hash&gt;&amp;characterId=&lt;character-id&gt;"></textarea>
+            </label>
+            <label>
+                <span>Access token</span>
+                <input id="access-token" type="password" autocomplete="off" required placeholder="Paste token">
+            </label>
+            <p id="form-message" class="notice" hidden></p>
+            <div class="button-row">
+                <button type="submit">Save and connect</button>
+                <button id="cancel-edit" class="button-secondary" type="button" hidden>Cancel</button>
+            </div>
+        </form>
+    </section>
+    <section class="panel">
+        <div class="panel-heading">
+            <h2>Configured characters</h2>
+            <span id="connection-count" class="muted">0</span>
+        </div>
+        <div id="connection-list" class="connection-list"></div>
+    </section>
+</main>
+</body>
+</html>

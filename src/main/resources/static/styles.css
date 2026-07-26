@@ -1,0 +1,96 @@
+:root {
+    color-scheme: dark;
+    --bg: #07111d;
+    --panel: #101d2c;
+    --panel-2: #172638;
+    --border: #28405a;
+    --text: #edf6ff;
+    --muted: #92a8bd;
+    --accent: #61d9c8;
+    --danger: #ff7d8d;
+}
+
+* { box-sizing: border-box; }
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at top left, #14304b 0, var(--bg) 42%);
+    color: var(--text);
+    font: 15px/1.5 Inter, ui-sans-serif, system-ui, sans-serif;
+}
+a { color: var(--accent); }
+button, input, textarea { font: inherit; }
+button, .button-link {
+    border: 0;
+    border-radius: 9px;
+    padding: 10px 14px;
+    background: var(--accent);
+    color: #05201c;
+    font-weight: 700;
+    cursor: pointer;
+}
+.button-secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); }
+.button-danger { background: #562736; color: #ffdce2; }
+.site-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 28px clamp(20px, 5vw, 72px);
+    border-bottom: 1px solid var(--border);
+}
+.site-header h1, .login-card h1 { margin: 0; }
+.site-header nav, .button-row, .panel-heading, .connection-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.page-shell { width: min(1320px, calc(100% - 40px)); margin: 28px auto 60px; }
+.eyebrow { margin: 0 0 4px; color: var(--accent); text-transform: uppercase; letter-spacing: .12em; font-size: 12px; }
+.muted { color: var(--muted); }
+.summary-bar, .panel, .character-card, .empty-card {
+    border: 1px solid var(--border);
+    background: rgba(16, 29, 44, .94);
+    border-radius: 16px;
+}
+.summary-bar { display: flex; align-items: center; gap: 28px; padding: 16px 20px; margin-bottom: 20px; }
+.summary-bar div { display: flex; gap: 6px; }
+.summary-bar .muted { margin-left: auto; }
+.character-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(360px, 1fr)); gap: 18px; }
+.character-card, .empty-card, .panel { padding: 20px; }
+.character-card header { display: flex; justify-content: space-between; gap: 16px; }
+.character-card h2 { margin: 0; }
+.status { border-radius: 999px; padding: 5px 9px; background: #3c2c39; color: #ffc7d1; font-size: 12px; height: fit-content; }
+.status.connected { background: #153e39; color: #92f4df; }
+.metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
+.metrics div { background: var(--panel-2); border-radius: 10px; padding: 10px; }
+.metrics dt { color: var(--muted); font-size: 12px; }
+.metrics dd { margin: 3px 0 0; font-weight: 700; }
+.message-list { display: grid; gap: 6px; }
+.message-row { display: grid; grid-template-columns: 82px 145px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--border); font-size: 13px; }
+.message-row time, .message-row span { color: var(--muted); }
+.admin-layout { display: grid; grid-template-columns: minmax(320px, .8fr) minmax(480px, 1.2fr); gap: 20px; }
+.panel h2 { margin-top: 0; }
+.panel-heading { justify-content: space-between; }
+label { display: grid; gap: 6px; margin: 16px 0; }
+input, textarea {
+    width: 100%;
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    background: #091522;
+    color: var(--text);
+    padding: 11px;
+}
+.connection-list { display: grid; gap: 12px; }
+.connection-row { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-2); }
+.connection-row code { display: block; overflow-wrap: anywhere; color: var(--muted); margin-top: 8px; }
+.notice { border-radius: 9px; background: #183750; padding: 9px 11px; }
+.notice.error { background: #4b2431; color: #ffd2da; }
+.login-page { display: grid; place-items: center; padding: 24px; }
+.login-card { width: min(420px, 100%); border: 1px solid var(--border); background: var(--panel); border-radius: 18px; padding: 28px; }
+
+@media (max-width: 820px) {
+    .admin-layout { grid-template-columns: 1fr; }
+    .site-header { align-items: flex-start; }
+    .message-row { grid-template-columns: 70px 1fr; }
+    .message-row span { grid-column: 1 / -1; }
+}

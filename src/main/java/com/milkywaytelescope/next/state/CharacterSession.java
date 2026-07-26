@@ -1,0 +1,281 @@
+package com.milkywaytelescope.next.state;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.milkywaytelescope.next.connection.ConnectionProfile;
+import com.milkywaytelescope.next.message.MessageEnvelope;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+public final class CharacterSession {
+    private final String characterId;
+    private final ObjectMapper objectMapper;
+    private final int recentLimit;
+    private final int maxPayloadBytes;
+    private final Deque<MessageEnvelope> recentMessages = new ArrayDeque<>();
+    private final Map<String, Long> messageCountsByType = new LinkedHashMap<>();
+
+    private long generation;
+    private long nextSequence;
+    private String status = "idle";
+    private String redactedUrl;
+    private Instant startedAt;
+    private Instant connectedAt;
+    private Instant lastMessageAt;
+    private Instant closedAt;
+    private Integer closeCode;
+    private String closeReason;
+    private String error;
+    private long totalMessages;
+    private String characterName;
+    private String gameMode;
+
+    public CharacterSession(
+            String characterId,
+            ObjectMapper objectMapper,
+            int recentLimit,
+            int maxPayloadBytes
+    ) {
+        this.characterId = characterId;
+        this.objectMapper = objectMapper;
+        this.recentLimit = Math.max(1, recentLimit);
+        this.maxPayloadBytes = Math.max(1, maxPayloadBytes);
+    }
+
+    public synchronized long beginGeneration(ConnectionProfile profile) {
+        generation++;
+        nextSequence = 0;
+        status = "connecting";
+        redactedUrl = profile.redactedUrl();
+        startedAt = Instant.now();
+        connectedAt = null;
+        lastMessageAt = null;
+        closedAt = null;
+        closeCode = null;
+        closeReason = null;
+        error = null;
+        totalMessages = 0;
+        characterName = null;
+        gameMode = null;
+        recentMessages.clear();
+        messageCountsByType.clear();
+        return generation;
+    }
+
+    public synchronized void markConfigured(ConnectionProfile profile) {
+        redactedUrl = profile.redactedUrl();
+    }
+
+    public synchronized void markConnected(long expectedGeneration) {
+        if (expectedGeneration != generation) {
+            return;
+        }
+        status = "connected";
+        connectedAt = Instant.now();
+        closedAt = null;
+        error = null;
+    }
+
+    public synchronized void markClosed(long expectedGeneration, int code, String reason) {
+        if (expectedGeneration != generation) {
+            return;
+        }
+        status = "closed";
+        closedAt = Instant.now();
+        closeCode = code;
+        closeReason = blankToNull(reason);
+    }
+
+    public synchronized void markError(long expectedGeneration, Throwable throwable) {
+        if (expectedGeneration != generation) {
+            return;
+        }
+        status = "error";
+        closedAt = Instant.now();
+        error = throwable == null ? "Unknown connection error" : throwable.getClass().getSimpleName();
+    }
+
+    public synchronized void recordText(long expectedGeneration, String rawPayload) {
+        if (expectedGeneration != generation) {
+            return;
+        }
+        byte[] bytes = rawPayload.getBytes(StandardCharsets.UTF_8);
+        Instant receivedAt = Instant.now();
+        lastMessageAt = receivedAt;
+        totalMessages++;
+        nextSequence++;
+
+        JsonNode payload = null;
+        String type = "unknown";
+        String summary;
+        if (bytes.length > maxPayloadBytes) {
+            type = "oversized";
+            summary = "Payload omitted because it exceeds the configured limit";
+        } else {
+            try {
+                payload = objectMapper.readTree(rawPayload);
+                type = text(payload, "type", "unknown");
+                project(type, payload);
+                summary = summarize(type, payload);
+            } catch (JsonProcessingException exception) {
+                type = "unparseable";
+                summary = "Unable to parse JSON payload";
+            }
+        }
+
+        messageCountsByType.merge(type, 1L, Long::sum);
+        addMessage(new MessageEnvelope(
+                nextSequence,
+                receivedAt,
+                type,
+                "text",
+                bytes.length,
+                summary,
+                bytes.length <= maxPayloadBytes ? rawPayload : null
+        ));
+    }
+
+    public synchronized void recordBinary(long expectedGeneration, byte[] bytes) {
+        if (expectedGeneration != generation) {
+            return;
+        }
+        Instant receivedAt = Instant.now();
+        lastMessageAt = receivedAt;
+        totalMessages++;
+        nextSequence++;
+        messageCountsByType.merge("binary", 1L, Long::sum);
+        addMessage(new MessageEnvelope(
+                nextSequence,
+                receivedAt,
+                "binary",
+                "binary",
+                bytes.length,
+                "Binary payload",
+                null
+        ));
+    }
+
+    public synchronized CharacterSnapshot snapshot(int messageLimit, boolean includePayload) {
+        int boundedLimit = Math.max(0, Math.min(messageLimit, recentLimit));
+        List<MessageView> messages = new ArrayList<>();
+        var iterator = recentMessages.descendingIterator();
+        while (iterator.hasNext() && messages.size() < boundedLimit) {
+            MessageEnvelope message = iterator.next();
+            messages.add(new MessageView(
+                    message.sequence(),
+                    message.receivedAt(),
+                    message.type(),
+                    message.opcode(),
+                    message.byteLength(),
+                    message.summary(),
+                    includePayload ? message.rawPayload() : null
+            ));
+        }
+        return new CharacterSnapshot(
+                new ConnectionView(
+                        characterId,
+                        status,
+                        "connected".equals(status),
+                        generation,
+                        redactedUrl,
+                        startedAt,
+                        connectedAt,
+                        lastMessageAt,
+                        closedAt,
+                        closeCode,
+                        closeReason,
+                        error,
+                        totalMessages
+                ),
+                characterName == null ? null : new CharacterView(characterId, characterName, gameMode),
+                Map.copyOf(messageCountsByType),
+                messages
+        );
+    }
+
+    private void addMessage(MessageEnvelope message) {
+        recentMessages.addLast(message);
+        while (recentMessages.size() > recentLimit) {
+            recentMessages.removeFirst();
+        }
+    }
+
+    private void project(String type, JsonNode payload) {
+        if (!"init_character_data".equals(type)) {
+            return;
+        }
+        JsonNode character = payload.get("character");
+        if (character != null && !character.isNull()) {
+            characterName = text(character, "name", null);
+            gameMode = text(character, "gameMode", null);
+        }
+    }
+
+    private static String summarize(String type, JsonNode payload) {
+        return switch (type) {
+            case "init_character_data" -> "Character baseline loaded";
+            case "action_completed" -> "Action completed";
+            case "actions_updated" -> "Actions updated";
+            case "items_updated" -> "Items updated";
+            case "new_battle" -> "New battle";
+            case "battle_updated" -> "Battle updated";
+            case "chat_message_received" -> "Chat message received";
+            default -> type;
+        };
+    }
+
+    private static String text(JsonNode node, String field, String fallback) {
+        JsonNode value = node == null ? null : node.get(field);
+        return value == null || value.isNull() ? fallback : value.asText(fallback);
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value;
+    }
+
+    public record CharacterSnapshot(
+            ConnectionView connection,
+            CharacterView character,
+            Map<String, Long> messageCountsByType,
+            List<MessageView> recentMessages
+    ) {
+    }
+
+    public record ConnectionView(
+            String characterId,
+            String status,
+            boolean connected,
+            long generation,
+            String redactedUrl,
+            Instant startedAt,
+            Instant connectedAt,
+            Instant lastMessageAt,
+            Instant closedAt,
+            Integer closeCode,
+            String closeReason,
+            String error,
+            long totalMessages
+    ) {
+    }
+
+    public record CharacterView(String id, String name, String gameMode) {
+    }
+
+    public record MessageView(
+            long sequence,
+            Instant receivedAt,
+            String type,
+            String opcode,
+            int byteLength,
+            String summary,
+            String payload
+    ) {
+    }
+}

@@ -1,0 +1,34 @@
+server:
+  address: ${SERVER_ADDRESS:127.0.0.1}
+  port: ${SERVER_PORT:8081}
+  forward-headers-strategy: framework
+  servlet:
+    session:
+      cookie:
+        http-only: true
+        secure: ${SESSION_COOKIE_SECURE:false}
+        same-site: lax
+
+spring:
+  application:
+    name: telescope-next
+  thymeleaf:
+    cache: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+telescope:
+  site-password: ${MONITOR_SITE_PASSWORD:}
+  storage:
+    connection-file: ${TELESCOPE_CONNECTION_FILE:data/connections.json}
+  message:
+    recent-limit: 100
+    max-payload-bytes: 1048576
+  wss:
+    auto-connect: ${TELESCOPE_AUTO_CONNECT:false}
+    auto-reconnect: true
+    reconnect-delay: 30s

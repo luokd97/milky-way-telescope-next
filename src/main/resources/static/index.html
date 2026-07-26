@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Milky Way Telescope Next</title>
+    <link rel="stylesheet" href="/styles.css">
+    <script src="/app.js" defer></script>
+</head>
+<body>
+<header class="site-header">
+    <div>
+        <p class="eyebrow">Milky Way Idle observer</p>
+        <h1>Telescope Next</h1>
+    </div>
+    <nav>
+        <a href="/admin">Connections</a>
+        <form method="post" action="/logout" id="logout-form">
+            <button class="button-secondary" type="submit">Sign out</button>
+        </form>
+    </nav>
+</header>
+<main class="page-shell">
+    <section class="summary-bar">
+        <div><strong id="character-count">0</strong><span>characters</span></div>
+        <div><strong id="connected-count">0</strong><span>connected</span></div>
+        <span id="last-refresh" class="muted">Waiting for data</span>
+    </section>
+    <section id="character-grid" class="character-grid" aria-live="polite"></section>
+</main>
+</body>
+</html>

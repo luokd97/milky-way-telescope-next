@@ -1,0 +1,22 @@
+[Unit]
+Description=Milky Way Telescope Next
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=telescope-next
+Group=telescope-next
+WorkingDirectory=/var/lib/telescope-next
+EnvironmentFile=/etc/telescope-next/telescope-next.env
+ExecStart=/usr/bin/java -jar /opt/telescope-next/app.jar
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/telescope-next
+
+[Install]
+WantedBy=multi-user.target
