@@ -428,6 +428,8 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
 @media (max-width: 640px) {
     .header-refresh:not(.refresh-error) { display: none; }
 
+    .character-grid { gap: 12px; }
+
     .character-card [data-dashboard-section]:not([data-dashboard-section="currentActivity"]) {
         display: none;
     }
@@ -443,12 +445,15 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
         display: block;
     }
 
-    .card-sections { margin-top: 12px; }
+    .card-sections { gap: 10px; margin-top: 10px; }
+    .character-card .card-subpanel { padding: 11px; }
+    .character-card .section-heading { margin-bottom: 8px; }
     .diagnostics-panel { display: none; }
 }
 
 @media (max-width: 540px) {
-    .site-header { align-items: center; gap: 16px; padding: 12px 20px; }
+    .site-header { align-items: center; gap: 12px; padding: 10px 14px; }
+    .site-header h1 { font-size: 22px; }
     .site-header-copy { display: flex; align-items: center; flex: 1; gap: 6px; min-width: 0; }
     .site-header-copy h1 { flex: 0 0 auto; font-size: 19px; white-space: nowrap; }
     .header-summary {
@@ -493,19 +498,48 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .mode-badge { font-size: 0; }
     .mode-badge::after { content: attr(data-mobile-label); font-size: 11px; }
     .slot-group[data-slot-group="drinks"] .slot-group-label { display: none; }
-    .page-shell { width: min(100% - 24px, 1480px); margin-top: 14px; }
+    .page-shell { width: min(100% - 20px, 1480px); margin-top: 12px; margin-bottom: 40px; }
     .session-footer {
         align-items: flex-start;
-        width: min(100% - 24px, 1480px);
+        width: min(100% - 20px, 1480px);
         flex-direction: column;
-        gap: 14px;
+        gap: 10px;
+        margin-bottom: 28px;
     }
-    .character-card { padding: 15px; }
-    .character-card-header { gap: 10px; }
+    .character-card { padding: 12px; border-radius: 14px; }
+    .character-card-header { gap: 8px; }
     .character-meta { max-width: 250px; }
-    .inventory-list { grid-template-columns: 1fr; }
+    .card-sections { gap: 8px; margin-top: 8px; }
+    .character-card .card-subpanel { padding: 10px; border-radius: 10px; }
+    .activity-line > strong { font-size: 19px; }
+    .task-line { gap: 6px 12px; margin-top: 6px; }
+    .slot-groups { gap: 5px; margin-top: 8px; }
+    .slot-list { gap: 4px; }
+    .slot-chip { min-width: 48px; min-height: 30px; padding: 3px 6px; }
+    .battle-block { margin-top: 10px; padding-top: 10px; }
+    .inventory-list { grid-template-columns: 1fr; gap: 5px; }
+    .inventory-item { gap: 7px; padding: 6px 7px; }
+    .event-list { gap: 5px; }
+    .event-row { gap: 8px; padding: 6px 7px; }
     .diagnostics-panel > summary,
     .diagnostics-body { padding-left: 15px; padding-right: 15px; }
+    .settings-layout { gap: 16px; }
+    .settings-layout .panel { padding: 15px; border-radius: 14px; }
+    .settings-description { margin-top: 6px; }
+    #dashboard-order-form { margin-top: 14px; }
+    .section-order-list { gap: 6px; margin-bottom: 12px; }
+    .section-order-row { min-height: 56px; padding: 8px 10px; gap: 8px; }
+    .section-order-position { width: 26px; height: 26px; }
+    .section-order-controls { gap: 4px; }
+    .order-button { width: 32px; height: 32px; }
+    .settings-section { gap: 8px; }
+    .admin-layout { gap: 12px; }
+    .connection-list { gap: 8px; }
+    .connection-row { gap: 10px; padding: 11px; }
+    .settings-layout label:not(.diagnostic-character-field) { gap: 5px; margin: 12px 0; }
+    .settings-layout input,
+    .settings-layout textarea { padding: 9px; }
+    .settings-layout .button-row { gap: 8px; }
     .panel-heading { align-items: flex-start; flex-direction: column; }
     .settings-section-heading { align-items: flex-start; flex-direction: column; gap: 4px; }
     .settings-section-heading > p { text-align: left; }
