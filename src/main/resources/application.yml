@@ -25,6 +25,7 @@ telescope:
   site-password: ${MONITOR_SITE_PASSWORD:}
   storage:
     connection-file: ${TELESCOPE_CONNECTION_FILE:data/connections.json}
+    control-file: ${TELESCOPE_CONTROL_FILE:data/connection-control.json}
   message:
     recent-limit: 100
     max-payload-bytes: 1048576
@@ -32,3 +33,4 @@ telescope:
     auto-connect: ${TELESCOPE_AUTO_CONNECT:false}
     auto-reconnect: true
     reconnect-delay: 30s
+    takeover-yield-duration: ${TELESCOPE_WSS_TAKEOVER_YIELD_DURATION:2h}

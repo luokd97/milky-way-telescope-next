@@ -61,6 +61,7 @@ button, .button-link {
 .character-card h2 { margin: 0; }
 .status { border-radius: 999px; padding: 5px 9px; background: #3c2c39; color: #ffc7d1; font-size: 12px; height: fit-content; }
 .status.connected { background: #153e39; color: #92f4df; }
+.status.yielded { background: #433817; color: #ffe08a; }
 .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 18px 0; }
 .metrics div { background: var(--panel-2); border-radius: 10px; padding: 10px; }
 .metrics dt { color: var(--muted); font-size: 12px; }

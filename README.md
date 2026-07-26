@@ -9,6 +9,7 @@ Read-only, multi-character WebSocket monitor for Milky Way Idle.
 - Typed connection and character summary state with room for additional message projectors.
 - Password-protected dashboard and connection administration.
 - Runtime URL/access-token updates persisted outside the application JAR.
+- Protocol-aware session takeover handling that yields for two hours instead of fighting the official game client.
 - GitHub Release workflow for reproducible Java 21 builds.
 
 The monitor never sends game actions. Its only outbound WebSocket operation is the protocol close frame.
@@ -42,6 +43,11 @@ Runtime profiles are written to `data/connections.json`, which is excluded from 
 
 Never commit a real profile.
 
+If the server sends a `close_session` message with `shouldReconnect: false`, Telescope records the
+message, cancels automatic reconnects, and yields that character for two hours. The yield deadline
+is persisted in `data/connection-control.json`, survives application restarts, and can be resumed or
+extended from the connection admin.
+
 ## Configuration
 
 | Environment variable | Default | Purpose |
@@ -51,7 +57,9 @@ Never commit a real profile.
 | `SERVER_PORT` | `8081` | HTTP port |
 | `SESSION_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
 | `TELESCOPE_CONNECTION_FILE` | `data/connections.json` | External profile file |
+| `TELESCOPE_CONTROL_FILE` | `data/connection-control.json` | External takeover-yield state file |
 | `TELESCOPE_AUTO_CONNECT` | `false` | Connect stored profiles during startup |
+| `TELESCOPE_WSS_TAKEOVER_YIELD_DURATION` | `2h` | Delay before automatically resuming after another game session takes over |
 
 ## Build
 
@@ -82,6 +90,7 @@ Keep the JAR, state, and secrets in separate locations:
 ```text
 /opt/telescope-next/app.jar
 /var/lib/telescope-next/connections.json
+/var/lib/telescope-next/connection-control.json
 /etc/telescope-next/telescope-next.env
 ```
 

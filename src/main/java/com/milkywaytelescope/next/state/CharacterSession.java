@@ -33,6 +33,9 @@ public final class CharacterSession {
     private Integer closeCode;
     private String closeReason;
     private String error;
+    private Instant yieldedAt;
+    private Instant resumeAt;
+    private String yieldReason;
     private long totalMessages;
     private String characterName;
     private String gameMode;
@@ -61,6 +64,9 @@ public final class CharacterSession {
         closeCode = null;
         closeReason = null;
         error = null;
+        yieldedAt = null;
+        resumeAt = null;
+        yieldReason = null;
         totalMessages = 0;
         characterName = null;
         gameMode = null;
@@ -87,7 +93,9 @@ public final class CharacterSession {
         if (expectedGeneration != generation) {
             return;
         }
-        status = "closed";
+        if (!"yielded".equals(status)) {
+            status = "closed";
+        }
         closedAt = Instant.now();
         closeCode = code;
         closeReason = blankToNull(reason);
@@ -97,14 +105,40 @@ public final class CharacterSession {
         if (expectedGeneration != generation) {
             return;
         }
-        status = "error";
+        if (!"yielded".equals(status)) {
+            status = "error";
+        }
         closedAt = Instant.now();
         error = throwable == null ? "Unknown connection error" : throwable.getClass().getSimpleName();
     }
 
-    public synchronized void recordText(long expectedGeneration, String rawPayload) {
+    public synchronized void markYielded(
+            long expectedGeneration,
+            Instant yieldedAt,
+            Instant resumeAt,
+            String reason
+    ) {
         if (expectedGeneration != generation) {
             return;
+        }
+        applyYielded(yieldedAt, resumeAt, reason);
+    }
+
+    public synchronized void restoreYielded(Instant yieldedAt, Instant resumeAt, String reason) {
+        applyYielded(yieldedAt, resumeAt, reason);
+    }
+
+    private void applyYielded(Instant yieldedAt, Instant resumeAt, String reason) {
+        status = "yielded";
+        this.yieldedAt = yieldedAt;
+        this.resumeAt = resumeAt;
+        this.yieldReason = reason;
+        error = null;
+    }
+
+    public synchronized TextMessageResult recordText(long expectedGeneration, String rawPayload) {
+        if (expectedGeneration != generation) {
+            return TextMessageResult.NONE;
         }
         byte[] bytes = rawPayload.getBytes(StandardCharsets.UTF_8);
         Instant receivedAt = Instant.now();
@@ -115,6 +149,7 @@ public final class CharacterSession {
         JsonNode payload = null;
         String type = "unknown";
         String summary;
+        TextMessageResult result = TextMessageResult.NONE;
         if (bytes.length > maxPayloadBytes) {
             type = "oversized";
             summary = "Payload omitted because it exceeds the configured limit";
@@ -124,6 +159,12 @@ public final class CharacterSession {
                 type = text(payload, "type", "unknown");
                 project(type, payload);
                 summary = summarize(type, payload);
+                JsonNode shouldReconnect = payload.path("shouldReconnect");
+                if ("close_session".equals(type)
+                        && shouldReconnect.isBoolean()
+                        && !shouldReconnect.asBoolean()) {
+                    result = new TextMessageResult(true, text(payload, "message", "Another game session was opened"));
+                }
             } catch (JsonProcessingException exception) {
                 type = "unparseable";
                 summary = "Unable to parse JSON payload";
@@ -140,6 +181,7 @@ public final class CharacterSession {
                 summary,
                 bytes.length <= maxPayloadBytes ? rawPayload : null
         ));
+        return result;
     }
 
     public synchronized void recordBinary(long expectedGeneration, byte[] bytes) {
@@ -192,6 +234,9 @@ public final class CharacterSession {
                         closeCode,
                         closeReason,
                         error,
+                        yieldedAt,
+                        resumeAt,
+                        yieldReason,
                         totalMessages
                 ),
                 characterName == null ? null : new CharacterView(characterId, characterName, gameMode),
@@ -227,6 +272,7 @@ public final class CharacterSession {
             case "new_battle" -> "New battle";
             case "battle_updated" -> "Battle updated";
             case "chat_message_received" -> "Chat message received";
+            case "close_session" -> text(payload, "message", "Session closed");
             default -> type;
         };
     }
@@ -261,6 +307,9 @@ public final class CharacterSession {
             Integer closeCode,
             String closeReason,
             String error,
+            Instant yieldedAt,
+            Instant resumeAt,
+            String yieldReason,
             long totalMessages
     ) {
     }
@@ -277,5 +326,9 @@ public final class CharacterSession {
             String summary,
             String payload
     ) {
+    }
+
+    public record TextMessageResult(boolean shouldYield, String reason) {
+        private static final TextMessageResult NONE = new TextMessageResult(false, null);
     }
 }

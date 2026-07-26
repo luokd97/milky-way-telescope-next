@@ -33,6 +33,7 @@ public class TelescopeProperties {
 
     public static class Storage {
         private Path connectionFile = Path.of("data/connections.json");
+        private Path controlFile = Path.of("data/connection-control.json");
 
         public Path getConnectionFile() {
             return connectionFile;
@@ -40,6 +41,14 @@ public class TelescopeProperties {
 
         public void setConnectionFile(Path connectionFile) {
             this.connectionFile = connectionFile;
+        }
+
+        public Path getControlFile() {
+            return controlFile;
+        }
+
+        public void setControlFile(Path controlFile) {
+            this.controlFile = controlFile;
         }
     }
 
@@ -68,6 +77,7 @@ public class TelescopeProperties {
         private boolean autoConnect;
         private boolean autoReconnect = true;
         private Duration reconnectDelay = Duration.ofSeconds(30);
+        private Duration takeoverYieldDuration = Duration.ofHours(2);
 
         public boolean isAutoConnect() {
             return autoConnect;
@@ -91,6 +101,19 @@ public class TelescopeProperties {
 
         public void setReconnectDelay(Duration reconnectDelay) {
             this.reconnectDelay = reconnectDelay;
+        }
+
+        public Duration getTakeoverYieldDuration() {
+            return takeoverYieldDuration;
+        }
+
+        public void setTakeoverYieldDuration(Duration takeoverYieldDuration) {
+            if (takeoverYieldDuration == null
+                    || takeoverYieldDuration.isZero()
+                    || takeoverYieldDuration.isNegative()) {
+                throw new IllegalArgumentException("takeoverYieldDuration must be positive");
+            }
+            this.takeoverYieldDuration = takeoverYieldDuration;
         }
     }
 }
