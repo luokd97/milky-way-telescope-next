@@ -164,10 +164,10 @@ class CharacterProjectionTest {
                       "currentHitpoints": 600,
                       "combatConsumables": [
                         {"itemHrid": "/items/food_1", "count": 1500},
-                        {"itemHrid": "/items/food_2", "count": 1400},
+                        null,
                         {"itemHrid": "/items/food_3", "count": 1300},
                         {"itemHrid": "/items/drink_1", "count": 300},
-                        {"itemHrid": "/items/drink_2", "count": 280},
+                        null,
                         {"itemHrid": "/items/drink_3", "count": 260}
                       ]
                     }
@@ -178,8 +178,19 @@ class CharacterProjectionTest {
 
         var activeBattle = projection.snapshot(1, "connected").battle();
         assertThat(activeBattle.active()).isTrue();
-        assertThat(activeBattle.foodConsumableCounts()).containsExactly(1500.0, 1400.0, 1300.0);
-        assertThat(activeBattle.drinkConsumableCounts()).containsExactly(300.0, 280.0, 260.0);
+        assertThat(activeBattle.foodConsumableCounts()).containsExactly(1500.0, 0.0, 1300.0);
+        assertThat(activeBattle.drinkConsumableCounts()).containsExactly(300.0, 0.0, 260.0);
+        assertThat(activeBattle.foodConsumables()).hasSize(3);
+        assertThat(activeBattle.foodConsumables().getFirst())
+                .satisfies(slot -> {
+                    assertThat(slot.itemHrid()).isEqualTo("/items/food_1");
+                    assertThat(slot.label()).isEqualTo("Food 1");
+                    assertThat(slot.count()).isEqualTo(1500.0);
+                });
+        assertThat(activeBattle.foodConsumables().get(1)).isNull();
+        assertThat(activeBattle.drinkConsumables()).hasSize(3);
+        assertThat(activeBattle.drinkConsumables().getFirst().itemHrid()).isEqualTo("/items/drink_1");
+        assertThat(activeBattle.drinkConsumables().get(1)).isNull();
 
         projection.apply(1, "battle_updated", objectMapper.readTree("""
                 {

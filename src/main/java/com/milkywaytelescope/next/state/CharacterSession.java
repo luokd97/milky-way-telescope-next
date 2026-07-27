@@ -392,6 +392,15 @@ public final class CharacterSession {
     ) {
     }
 
+    public record BattleConsumableSlotView(
+            Integer slotIndex,
+            String itemHrid,
+            String label,
+            Integer enhancementLevel,
+            Double count
+    ) {
+    }
+
     public record BattleView(
             boolean active,
             Long battleId,
@@ -399,7 +408,9 @@ public final class CharacterSession {
             Integer wave,
             long totalBattlesSeen,
             List<Double> foodConsumableCounts,
-            List<Double> drinkConsumableCounts
+            List<Double> drinkConsumableCounts,
+            List<BattleConsumableSlotView> foodConsumables,
+            List<BattleConsumableSlotView> drinkConsumables
     ) {
     }
 

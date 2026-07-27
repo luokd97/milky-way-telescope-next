@@ -3,6 +3,7 @@ package com.milkywaytelescope.next.state;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.milkywaytelescope.next.state.CharacterSession.ActionDrinkSlotView;
 import com.milkywaytelescope.next.state.CharacterSession.ActionView;
+import com.milkywaytelescope.next.state.CharacterSession.BattleConsumableSlotView;
 import com.milkywaytelescope.next.state.CharacterSession.BattleView;
 import com.milkywaytelescope.next.state.CharacterSession.CharacterView;
 import com.milkywaytelescope.next.state.CharacterSession.ItemView;
@@ -336,7 +337,9 @@ final class CharacterProjection {
                 battleWave,
                 totalBattlesSeen,
                 combatConsumableCounts(consumables, 0),
-                combatConsumableCounts(consumables, CONSUMABLE_SLOT_COUNT)
+                combatConsumableCounts(consumables, CONSUMABLE_SLOT_COUNT),
+                combatConsumableViews(consumables, 0),
+                combatConsumableViews(consumables, CONSUMABLE_SLOT_COUNT)
         );
     }
 
@@ -373,6 +376,27 @@ final class CharacterProjection {
             counts.add(count == null ? 0.0 : count);
         }
         return List.copyOf(counts);
+    }
+
+    private List<BattleConsumableSlotView> combatConsumableViews(List<JsonNode> consumables, int startIndex) {
+        List<BattleConsumableSlotView> views = new ArrayList<>();
+        for (int i = 0; i < CONSUMABLE_SLOT_COUNT; i++) {
+            int index = startIndex + i;
+            JsonNode slot = index < consumables.size() ? consumables.get(index) : null;
+            String itemHrid = text(slot, "itemHrid", "");
+            if (itemHrid.isBlank()) {
+                views.add(null);
+                continue;
+            }
+            views.add(new BattleConsumableSlotView(
+                    i,
+                    itemHrid,
+                    labelFromHrid(itemHrid),
+                    integer(slot, "enhancementLevel"),
+                    doubleValue(slot, "count")
+            ));
+        }
+        return Collections.unmodifiableList(new ArrayList<>(views));
     }
 
     private List<ItemView> inventoryViews() {

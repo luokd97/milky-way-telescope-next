@@ -471,16 +471,20 @@ function updateBattle(card, action, battle) {
     {
       key: "food",
       label: "Food",
-      slots: battle.foodConsumableCounts || [],
+      slots: battle.foodConsumables || battle.foodConsumableCounts || [],
       threshold: FOOD_WARNING_THRESHOLD,
-      showItems: false,
+      showItems: Array.isArray(battle.foodConsumables),
+      showEmptyCount: true,
+      lowWithoutItem: true,
     },
     {
       key: "drinks",
       label: "Drinks",
-      slots: battle.drinkConsumableCounts || [],
+      slots: battle.drinkConsumables || battle.drinkConsumableCounts || [],
       threshold: DRINK_WARNING_THRESHOLD,
-      showItems: false,
+      showItems: Array.isArray(battle.drinkConsumables),
+      showEmptyCount: true,
+      lowWithoutItem: true,
     },
   ]);
 }
@@ -676,7 +680,7 @@ function updateSlotGroup(group, value) {
       value.slots?.[index] ?? null,
       index,
       value.threshold,
-      value.showItems,
+      value,
     );
   }
 }
@@ -697,18 +701,21 @@ function createSlotChip(index) {
   return chip;
 }
 
-function updateSlotChip(chip, slot, index, threshold, showItems) {
+function updateSlotChip(chip, slot, index, threshold, options) {
+  const showItems = options.showItems === true;
   const rawCount = typeof slot === "number" ? slot : slot?.count;
   const count = Number(rawCount || 0);
   const hasItem = Boolean(slot?.itemHrid);
-  const low = showItems ? hasItem && count < threshold : count < threshold;
+  const low = options.lowWithoutItem === true || !showItems
+    ? count < threshold
+    : hasItem && count < threshold;
   const label = slot?.label || slot?.itemHrid || `Slot ${index + 1}`;
   setElementClass(chip, `slot-chip${low ? " low" : ""}${!hasItem && showItems ? " empty" : ""}`);
   setElementTitle(chip, `${label}: ${formatItemCount(count)}`);
   updateIconAnchor(chip.querySelector("[data-role='icon']"), slot?.itemHrid, String(index + 1));
   setElementText(
     chip.querySelector("[data-role='count']"),
-    hasItem || !showItems ? formatItemCount(count) : "—",
+    hasItem || !showItems || options.showEmptyCount === true ? formatItemCount(count) : "—",
   );
 }
 
