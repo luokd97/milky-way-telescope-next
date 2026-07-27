@@ -176,6 +176,48 @@ class CharacterSessionTest {
     }
 
     @Test
+    void clearsRecentEventsWithoutDroppingRecentMessages() {
+        CharacterSession session = new CharacterSession("7", new ObjectMapper(), 100, 4096);
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=7",
+                "sample-token"
+        );
+        long generation = session.beginGeneration(profile);
+        session.recordText(generation, """
+                {
+                  "type": "init_character_data",
+                  "character": {"id": 7, "name": "Observer"}
+                }
+                """);
+        session.recordText(generation, """
+                {
+                  "type": "action_completed",
+                  "endCharacterItems": [
+                    {"itemHrid": "/items/wisdom_tea", "count": 10}
+                  ]
+                }
+                """);
+
+        session.clearRecentEvents();
+
+        var cleared = session.snapshot(100, false);
+        assertThat(cleared.recentEvents()).isEmpty();
+        assertThat(cleared.recentMessages()).hasSize(2);
+
+        session.recordText(generation, """
+                {
+                  "type": "action_completed",
+                  "endCharacterItems": [
+                    {"itemHrid": "/items/wisdom_tea", "count": 5}
+                  ]
+                }
+                """);
+        assertThat(session.snapshot(100, false).recentEvents())
+                .extracting(CharacterSession.MonitorEventView::count)
+                .containsExactly(5.0);
+    }
+
+    @Test
     void updatesInventoryWatchTermsForAnExistingSession() {
         CharacterSession session = new CharacterSession("7", new ObjectMapper(), 100, 4096);
         ConnectionProfile profile = ConnectionProfile.from(

@@ -74,6 +74,15 @@ public class AdminConnectionController {
         return ResponseEntity.noContent().build();
     }
 
+    @PostMapping("/{characterId}/recent-alerts/clear")
+    public ResponseEntity<Void> clearRecentAlerts(@PathVariable String characterId) {
+        if (profileStore.find(characterId) == null) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Connection not found");
+        }
+        registry.clearRecentEvents(characterId);
+        return ResponseEntity.noContent().build();
+    }
+
     @PostMapping("/{characterId}/reconnect")
     public ResponseEntity<Void> reconnect(@PathVariable String characterId) {
         if (!connectionManager.reconnect(characterId)) {

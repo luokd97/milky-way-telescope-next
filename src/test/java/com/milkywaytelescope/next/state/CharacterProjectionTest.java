@@ -136,6 +136,33 @@ class CharacterProjectionTest {
     }
 
     @Test
+    void clearsRecentEventsWithoutChangingProjectedInventory() throws Exception {
+        CharacterProjection projection = new CharacterProjection("7", 50, 12, List.of("tea"));
+        projection.apply(1, "init_character_data", objectMapper.readTree("""
+                {
+                  "character": {"id": 7, "name": "Observer"},
+                  "characterItems": [
+                    {"hash": "tea", "itemHrid": "/items/wisdom_tea", "count": 10}
+                  ]
+                }
+                """), Instant.parse("2026-07-26T08:00:00Z"), 1);
+        recordLowCount(projection, 10, "2026-07-26T08:01:00Z", 2);
+
+        projection.clearRecentEvents();
+
+        var cleared = projection.snapshot(1, "connected");
+        assertThat(cleared.recentEvents()).isEmpty();
+        assertThat(cleared.inventoryHighlights())
+                .extracting(CharacterSession.ItemView::count)
+                .containsExactly(10.0);
+
+        recordLowCount(projection, 5, "2026-07-26T08:02:00Z", 3);
+        assertThat(projection.snapshot(1, "connected").recentEvents())
+                .extracting(CharacterSession.MonitorEventView::count)
+                .containsExactly(5.0);
+    }
+
+    @Test
     void usesTheLocalBattlePlayerAndCompactUpdatesToDetermineBattleState() throws Exception {
         CharacterProjection projection = new CharacterProjection("7", 50, 12, List.of());
         projection.apply(1, "init_character_data", objectMapper.readTree("""

@@ -74,6 +74,10 @@ final class CharacterProjection {
         this.inventoryWatchTerms = normalizeInventoryWatchTerms(inventoryWatchTerms);
     }
 
+    void clearRecentEvents() {
+        recentEvents.clear();
+    }
+
     private static List<String> normalizeInventoryWatchTerms(List<String> inventoryWatchTerms) {
         return inventoryWatchTerms == null
                 ? List.of()

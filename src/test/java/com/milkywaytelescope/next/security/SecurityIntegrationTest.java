@@ -84,6 +84,67 @@ class SecurityIntegrationTest {
                         .with(user("owner").roles("OWNER"))
                         .with(csrf()))
                 .andExpect(status().isNotFound());
+
+        mockMvc.perform(post("/api/admin/connections/1/recent-alerts/clear")
+                        .with(user("owner").roles("OWNER")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(post("/api/admin/connections/1/recent-alerts/clear")
+                        .with(user("owner").roles("OWNER"))
+                        .with(csrf()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void clearsRecentAlertsForConfiguredCharacter() throws Exception {
+        String characterId = "77001";
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=" + characterId,
+                "clear-alerts-token"
+        );
+        ApplicationConfig previous = configStore.current();
+        configStore.replace(previous.withConnections(List.of(profile)));
+        var session = registry.getOrCreate(profile);
+        long generation = session.beginGeneration(profile);
+        session.recordText(generation, """
+                {
+                  "type": "init_character_data",
+                  "character": {"id": 77001, "name": "Alert Observer"}
+                }
+                """);
+        session.recordText(generation, """
+                {
+                  "type": "action_completed",
+                  "endCharacterItems": [
+                    {"itemHrid": "/items/wisdom_tea", "count": 10}
+                  ]
+                }
+                """);
+        try {
+            assertThat(session.snapshot(100, false).recentEvents()).hasSize(1);
+
+            mockMvc.perform(post("/api/admin/connections/" + characterId + "/recent-alerts/clear")
+                            .with(user("owner").roles("OWNER"))
+                            .with(csrf()))
+                    .andExpect(status().isNoContent());
+
+            var cleared = session.snapshot(100, false);
+            assertThat(cleared.recentEvents()).isEmpty();
+            assertThat(cleared.recentMessages()).hasSize(2);
+
+            session.recordText(generation, """
+                    {
+                      "type": "action_completed",
+                      "endCharacterItems": [
+                        {"itemHrid": "/items/wisdom_tea", "count": 5}
+                      ]
+                    }
+                    """);
+            assertThat(session.snapshot(100, false).recentEvents()).hasSize(1);
+        } finally {
+            registry.remove(characterId);
+            configStore.replace(previous);
+        }
     }
 
     @Test

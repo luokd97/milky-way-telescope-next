@@ -61,6 +61,15 @@ public class ConnectionRegistry {
         sessions.values().forEach(session -> session.updateInventoryWatchTerms(this.inventoryWatchTerms));
     }
 
+    public boolean clearRecentEvents(String characterId) {
+        CharacterSession session = sessions.get(characterId);
+        if (session == null) {
+            return false;
+        }
+        session.clearRecentEvents();
+        return true;
+    }
+
     public void remove(String characterId) {
         sessions.remove(characterId);
     }

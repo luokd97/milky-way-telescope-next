@@ -2,6 +2,8 @@ const state = {
   dashboard: null,
   polling: false,
   diagnosticCharacterId: null,
+  csrf: null,
+  clearingAlerts: new Set(),
 };
 
 const grid = document.getElementById("character-grid");
@@ -270,7 +272,12 @@ function createCharacterCard() {
       <section class="card-subpanel event-panel" data-dashboard-section="recentAlerts">
         <div class="section-heading">
           <span>Recent alerts</span>
-          <span class="section-meta" data-field="event-count"></span>
+          <span class="section-heading-actions">
+            <span class="section-meta" data-field="event-count"></span>
+            <button class="section-toggle event-clear" type="button"
+                data-field="event-clear" data-card-action="clear-recent-alerts"
+                aria-label="Clear recent alerts" hidden>Clear</button>
+          </span>
         </div>
         <div class="event-list" data-field="events"></div>
       </section>
@@ -353,12 +360,16 @@ function normalizeSectionOrder(order) {
   return order;
 }
 
-function handleCardAction(event) {
+async function handleCardAction(event) {
   const button = event.target.closest("button[data-card-action]");
   if (button) {
     const card = button.closest(".character-card");
     if (!card) return;
 
+    if (button.dataset.cardAction === "clear-recent-alerts") {
+      await clearRecentAlerts(card);
+      return;
+    }
     if (button.dataset.cardAction !== "toggle-action-queue") return;
 
     const expanded = card.dataset.actionQueueExpanded === "true";
@@ -557,10 +568,20 @@ function updateActionQueue(card, actions) {
 
 function updateEvents(card, events) {
   const root = card.querySelector("[data-field='events']");
+  const clearButton = card.querySelector("[data-field='event-clear']");
   const visibleEvents = events.slice(0, 8);
   setElementText(
     card.querySelector("[data-field='event-count']"),
     `${events.length} alert${events.length === 1 ? "" : "s"}`,
+  );
+  const hasEvents = events.length > 0;
+  const clearing = state.clearingAlerts.has(card.dataset.characterId);
+  setHidden(clearButton, !hasEvents);
+  clearButton.disabled = clearing;
+  setElementText(clearButton, clearing ? "Clearing…" : "Clear");
+  clearButton.setAttribute(
+    "aria-label",
+    `Clear recent alerts for ${card.querySelector("[data-field='character-name']")?.textContent || "character"}`,
   );
   if (!visibleEvents.length) {
     root.replaceChildren();
@@ -575,6 +596,59 @@ function updateEvents(card, events) {
     createEventRow,
     updateEventRow,
   );
+}
+
+async function clearRecentAlerts(card) {
+  const characterId = card.dataset.characterId;
+  if (!characterId || state.clearingAlerts.has(characterId)) return;
+
+  const characterName = card.querySelector("[data-field='character-name']")?.textContent || characterId;
+  if (!window.confirm(
+    `Clear current recent alerts for ${characterName}? This will not affect game data.`,
+  )) {
+    return;
+  }
+
+  state.clearingAlerts.add(characterId);
+  const button = card.querySelector("[data-field='event-clear']");
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Clearing…";
+  }
+
+  try {
+    const csrf = await dashboardCsrf();
+    const response = await fetch(
+      `/api/admin/connections/${encodeURIComponent(characterId)}/recent-alerts/clear`,
+      {
+        method: "POST",
+        cache: "no-store",
+        headers: { [csrf.headerName]: csrf.token },
+      },
+    );
+    if (!response.ok) {
+      let message = `HTTP ${response.status}`;
+      try {
+        const payload = await response.json();
+        message = payload.message || payload.detail || payload.error || message;
+      } catch {}
+      throw new Error(message);
+    }
+    await refresh();
+  } catch (error) {
+    window.alert(`Unable to clear recent alerts: ${error.message}`);
+  } finally {
+    state.clearingAlerts.delete(characterId);
+    if (state.dashboard) render(state.dashboard);
+  }
+}
+
+async function dashboardCsrf() {
+  if (state.csrf) return state.csrf;
+  const response = await fetch("/api/security/csrf", { cache: "no-store" });
+  if (!response.ok) throw new Error(`HTTP ${response.status}`);
+  state.csrf = await response.json();
+  return state.csrf;
 }
 
 function renderDiagnostics(dashboard) {

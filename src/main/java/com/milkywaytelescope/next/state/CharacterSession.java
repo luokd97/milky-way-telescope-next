@@ -98,6 +98,10 @@ public final class CharacterSession {
         projection.updateInventoryWatchTerms(inventoryWatchTerms);
     }
 
+    public synchronized void clearRecentEvents() {
+        projection.clearRecentEvents();
+    }
+
     public synchronized void markConnected(long expectedGeneration) {
         if (expectedGeneration != generation) {
             return;
