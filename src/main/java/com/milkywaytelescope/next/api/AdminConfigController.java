@@ -40,6 +40,7 @@ public class AdminConfigController {
     public ResponseEntity<ApplicationConfig> replace(@RequestBody ApplicationConfig input) {
         ApplicationConfig saved = configStore.replace(input);
         registry.updateInventoryWatchTerms(saved.dashboard().inventoryWatchTerms());
+        registry.updateMessageFilter(saved.message().filter());
         connectionManager.reconcile(saved.connections(), saved.connectionControls());
         return ResponseEntity.ok()
                 .cacheControl(CacheControl.noStore())

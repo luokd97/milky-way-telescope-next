@@ -290,6 +290,11 @@ class SecurityIntegrationTest {
                     ],
                     "inventoryWatchTerms": []
                   },
+                  "message": {
+                    "filter": {
+                      "type": ["battle_updated"]
+                    }
+                  },
                   "connectionSettings": {
                     "autoConnect": false,
                     "autoReconnect": false,
@@ -315,6 +320,7 @@ class SecurityIntegrationTest {
                         .content(configJson))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.schemaVersion").value(2))
+                .andExpect(jsonPath("$.message.filter.type[0]").value("battle_updated"))
                 .andExpect(jsonPath("$.connections").isEmpty());
     }
 

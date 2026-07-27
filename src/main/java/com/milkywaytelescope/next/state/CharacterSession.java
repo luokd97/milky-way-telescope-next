@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milkywaytelescope.next.connection.ConnectionProfile;
 import com.milkywaytelescope.next.message.MessageEnvelope;
+import com.milkywaytelescope.next.settings.MessageFilter;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.ArrayDeque;
@@ -22,6 +23,7 @@ public final class CharacterSession {
     private final CharacterProjection projection;
     private final Deque<MessageEnvelope> recentMessages = new ArrayDeque<>();
     private final Map<String, Long> messageCountsByType = new LinkedHashMap<>();
+    private MessageFilter messageFilter;
 
     private long generation;
     private long nextSequence;
@@ -45,7 +47,16 @@ public final class CharacterSession {
             int recentLimit,
             int maxPayloadBytes
     ) {
-        this(characterId, objectMapper, recentLimit, maxPayloadBytes, 50, 12, List.of());
+        this(
+                characterId,
+                objectMapper,
+                recentLimit,
+                maxPayloadBytes,
+                50,
+                12,
+                List.of(),
+                MessageFilter.defaults()
+        );
     }
 
     public CharacterSession(
@@ -57,6 +68,28 @@ public final class CharacterSession {
             int inventoryHighlightLimit,
             List<String> inventoryWatchTerms
     ) {
+        this(
+                characterId,
+                objectMapper,
+                recentLimit,
+                maxPayloadBytes,
+                recentEventLimit,
+                inventoryHighlightLimit,
+                inventoryWatchTerms,
+                MessageFilter.defaults()
+        );
+    }
+
+    public CharacterSession(
+            String characterId,
+            ObjectMapper objectMapper,
+            int recentLimit,
+            int maxPayloadBytes,
+            int recentEventLimit,
+            int inventoryHighlightLimit,
+            List<String> inventoryWatchTerms,
+            MessageFilter messageFilter
+    ) {
         this.characterId = characterId;
         this.objectMapper = objectMapper;
         this.recentLimit = Math.max(1, recentLimit);
@@ -67,6 +100,7 @@ public final class CharacterSession {
                 inventoryHighlightLimit,
                 inventoryWatchTerms
         );
+        this.messageFilter = messageFilter == null ? MessageFilter.defaults() : messageFilter;
     }
 
     public synchronized long beginGeneration(ConnectionProfile profile) {
@@ -96,6 +130,10 @@ public final class CharacterSession {
 
     public synchronized void updateInventoryWatchTerms(List<String> inventoryWatchTerms) {
         projection.updateInventoryWatchTerms(inventoryWatchTerms);
+    }
+
+    public synchronized void updateMessageFilter(MessageFilter messageFilter) {
+        this.messageFilter = messageFilter == null ? MessageFilter.defaults() : messageFilter;
     }
 
     public synchronized void clearRecentEvents() {
@@ -209,15 +247,17 @@ public final class CharacterSession {
         }
 
         messageCountsByType.merge(type, 1L, Long::sum);
-        addMessage(new MessageEnvelope(
-                nextSequence,
-                receivedAt,
-                type,
-                "text",
-                bytes.length,
-                summary,
-                bytes.length <= maxPayloadBytes ? rawPayload : null
-        ));
+        if (!messageFilter.matches(type)) {
+            addMessage(new MessageEnvelope(
+                    nextSequence,
+                    receivedAt,
+                    type,
+                    "text",
+                    bytes.length,
+                    summary,
+                    bytes.length <= maxPayloadBytes ? rawPayload : null
+            ));
+        }
         return result;
     }
 
@@ -230,15 +270,17 @@ public final class CharacterSession {
         totalMessages++;
         nextSequence++;
         messageCountsByType.merge("binary", 1L, Long::sum);
-        addMessage(new MessageEnvelope(
-                nextSequence,
-                receivedAt,
-                "binary",
-                "binary",
-                bytes.length,
-                "Binary payload",
-                null
-        ));
+        if (!messageFilter.matches("binary")) {
+            addMessage(new MessageEnvelope(
+                    nextSequence,
+                    receivedAt,
+                    "binary",
+                    "binary",
+                    bytes.length,
+                    "Binary payload",
+                    null
+            ));
+        }
     }
 
     public synchronized CharacterSnapshot snapshot(int messageLimit, boolean includePayload) {

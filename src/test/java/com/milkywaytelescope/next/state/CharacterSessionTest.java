@@ -4,11 +4,76 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milkywaytelescope.next.connection.ConnectionProfile;
+import com.milkywaytelescope.next.settings.MessageFilter;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CharacterSessionTest {
+    @Test
+    void filtersRecentMessagesWithoutSkippingProjectionOrCounts() {
+        CharacterSession session = new CharacterSession(
+                "7",
+                new ObjectMapper(),
+                100,
+                4096,
+                50,
+                12,
+                List.of(),
+                new MessageFilter(List.of("battle_updated"))
+        );
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=7",
+                "sample-token"
+        );
+        long generation = session.beginGeneration(profile);
+
+        session.recordText(generation, """
+                {"type":"init_character_data","character":{"id":7,"name":"Observer"}}
+                """);
+        session.recordText(generation, """
+                {
+                  "type":"new_battle",
+                  "battleId":41,
+                  "players":[{"character":{"id":7},"currentHitpoints":100}],
+                  "monsters":[{"currentHitpoints":100}]
+                }
+                """);
+        session.recordText(generation, """
+                {"type":"battle_updated","battleId":42,"wave":3}
+                """);
+
+        var snapshot = session.snapshot(100, true);
+
+        assertThat(snapshot.connection().totalMessages()).isEqualTo(3);
+        assertThat(snapshot.messageCountsByType()).containsEntry("battle_updated", 1L);
+        assertThat(snapshot.recentMessages())
+                .extracting(CharacterSession.MessageView::type)
+                .containsExactly("new_battle", "init_character_data");
+        assertThat(snapshot.battle().active()).isTrue();
+        assertThat(snapshot.battle().battleId()).isEqualTo(42L);
+    }
+
+    @Test
+    void appliesUpdatedMessageFilterToExistingSession() {
+        CharacterSession session = new CharacterSession("7", new ObjectMapper(), 100, 4096);
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=7",
+                "sample-token"
+        );
+        long generation = session.beginGeneration(profile);
+
+        session.recordText(generation, "{\"type\":\"items_updated\"}");
+        session.updateMessageFilter(new MessageFilter(List.of("items_updated")));
+        session.recordText(generation, "{\"type\":\"items_updated\"}");
+
+        assertThat(session.snapshot(100, false).recentMessages())
+                .singleElement()
+                .satisfies(message -> assertThat(message.sequence()).isEqualTo(1L));
+        assertThat(session.snapshot(100, false).messageCountsByType())
+                .containsEntry("items_updated", 2L);
+    }
+
     @Test
     void keepsBoundedMessagesAndProjectsCharacterBaseline() {
         CharacterSession session = new CharacterSession("7", new ObjectMapper(), 3, 4096);

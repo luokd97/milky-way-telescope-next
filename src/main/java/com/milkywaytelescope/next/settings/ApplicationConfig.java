@@ -11,6 +11,7 @@ import java.util.Set;
 public record ApplicationConfig(
         int schemaVersion,
         DashboardSettings dashboard,
+        MessageSettings message,
         ConnectionSettings connectionSettings,
         List<ConnectionProfile> connections,
         List<String> disabledConnections,
@@ -23,6 +24,7 @@ public record ApplicationConfig(
             throw new IllegalArgumentException("Unsupported application config schemaVersion: " + schemaVersion);
         }
         dashboard = dashboard == null ? DashboardSettings.defaults() : dashboard;
+        message = message == null ? MessageSettings.defaults() : message;
         connectionSettings = connectionSettings == null
                 ? ConnectionSettings.defaults()
                 : connectionSettings;
@@ -39,9 +41,29 @@ public record ApplicationConfig(
         this(
                 CURRENT_SCHEMA_VERSION,
                 dashboard,
+                MessageSettings.defaults(),
                 ConnectionSettings.defaults(),
                 connections,
                 List.of(),
+                connectionControls
+        );
+    }
+
+    public ApplicationConfig(
+            int schemaVersion,
+            DashboardSettings dashboard,
+            ConnectionSettings connectionSettings,
+            List<ConnectionProfile> connections,
+            List<String> disabledConnections,
+            List<ConnectionControlState> connectionControls
+    ) {
+        this(
+                schemaVersion,
+                dashboard,
+                MessageSettings.defaults(),
+                connectionSettings,
+                connections,
+                disabledConnections,
                 connectionControls
         );
     }
@@ -50,6 +72,7 @@ public record ApplicationConfig(
         return new ApplicationConfig(
                 CURRENT_SCHEMA_VERSION,
                 DashboardSettings.defaults(),
+                MessageSettings.defaults(),
                 ConnectionSettings.defaults(),
                 List.of(),
                 List.of(),
@@ -61,6 +84,7 @@ public record ApplicationConfig(
         return new ApplicationConfig(
                 schemaVersion,
                 nextDashboard,
+                message,
                 connectionSettings,
                 connections,
                 disabledConnections,
@@ -72,6 +96,7 @@ public record ApplicationConfig(
         return new ApplicationConfig(
                 schemaVersion,
                 dashboard,
+                message,
                 nextConnectionSettings,
                 connections,
                 disabledConnections,
@@ -83,6 +108,7 @@ public record ApplicationConfig(
         return new ApplicationConfig(
                 schemaVersion,
                 dashboard,
+                message,
                 connectionSettings,
                 nextConnections,
                 disabledConnections,
@@ -94,6 +120,7 @@ public record ApplicationConfig(
         return new ApplicationConfig(
                 schemaVersion,
                 dashboard,
+                message,
                 connectionSettings,
                 connections,
                 nextDisabledConnections,
@@ -105,10 +132,23 @@ public record ApplicationConfig(
         return new ApplicationConfig(
                 schemaVersion,
                 dashboard,
+                message,
                 connectionSettings,
                 connections,
                 disabledConnections,
                 nextControls
+        );
+    }
+
+    public ApplicationConfig withMessageSettings(MessageSettings nextMessage) {
+        return new ApplicationConfig(
+                schemaVersion,
+                dashboard,
+                nextMessage,
+                connectionSettings,
+                connections,
+                disabledConnections,
+                connectionControls
         );
     }
 

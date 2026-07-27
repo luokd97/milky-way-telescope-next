@@ -46,6 +46,11 @@ complete configuration. A typical file looks like:
     ],
     "inventoryWatchTerms": ["wisdom_tea", "coin"]
   },
+  "message": {
+    "filter": {
+      "type": ["battle_updated"]
+    }
+  },
   "connectionSettings": {
     "autoConnect": false,
     "autoReconnect": true,

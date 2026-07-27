@@ -3,7 +3,8 @@ package com.milkywaytelescope.next.state;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milkywaytelescope.next.config.TelescopeProperties;
 import com.milkywaytelescope.next.connection.ConnectionProfile;
-import com.milkywaytelescope.next.settings.DashboardSettingsStore;
+import com.milkywaytelescope.next.settings.ApplicationConfigStore;
+import com.milkywaytelescope.next.settings.MessageFilter;
 import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
@@ -18,19 +19,21 @@ public class ConnectionRegistry {
     private final int recentEventLimit;
     private final int inventoryHighlightLimit;
     private volatile List<String> inventoryWatchTerms;
+    private volatile MessageFilter messageFilter;
     private final ConcurrentMap<String, CharacterSession> sessions = new ConcurrentHashMap<>();
 
     public ConnectionRegistry(
             ObjectMapper objectMapper,
             TelescopeProperties properties,
-            DashboardSettingsStore settingsStore
+            ApplicationConfigStore configStore
     ) {
         this.objectMapper = objectMapper;
         this.recentLimit = Math.max(1, properties.getMessage().getRecentLimit());
         this.maxPayloadBytes = Math.max(1, properties.getMessage().getMaxPayloadBytes());
         this.recentEventLimit = Math.max(1, properties.getState().getRecentEventLimit());
         this.inventoryHighlightLimit = Math.max(1, properties.getInventory().getHighlightLimit());
-        this.inventoryWatchTerms = List.copyOf(settingsStore.current().inventoryWatchTerms());
+        this.inventoryWatchTerms = List.copyOf(configStore.current().dashboard().inventoryWatchTerms());
+        this.messageFilter = configStore.current().message().filter();
     }
 
     public CharacterSession getOrCreate(ConnectionProfile profile) {
@@ -43,7 +46,8 @@ public class ConnectionRegistry {
                         maxPayloadBytes,
                         recentEventLimit,
                         inventoryHighlightLimit,
-                        inventoryWatchTerms
+                        inventoryWatchTerms,
+                        messageFilter
                 )
         );
         session.markConfigured(profile);
@@ -59,6 +63,11 @@ public class ConnectionRegistry {
                 ? List.of()
                 : List.copyOf(inventoryWatchTerms);
         sessions.values().forEach(session -> session.updateInventoryWatchTerms(this.inventoryWatchTerms));
+    }
+
+    public void updateMessageFilter(MessageFilter messageFilter) {
+        this.messageFilter = messageFilter == null ? MessageFilter.defaults() : messageFilter;
+        sessions.values().forEach(session -> session.updateMessageFilter(this.messageFilter));
     }
 
     public boolean clearRecentEvents(String characterId) {

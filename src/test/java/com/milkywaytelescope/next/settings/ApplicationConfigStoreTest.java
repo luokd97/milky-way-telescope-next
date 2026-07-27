@@ -25,6 +25,7 @@ class ApplicationConfigStoreTest {
 
         assertThat(store.current().schemaVersion()).isEqualTo(2);
         assertThat(store.current().connectionSettings()).isEqualTo(ConnectionSettings.defaults());
+        assertThat(store.current().message()).isEqualTo(MessageSettings.defaults());
         assertThat(store.current().disabledConnections()).isEmpty();
     }
 
@@ -59,6 +60,8 @@ class ApplicationConfigStoreTest {
                 .isEqualTo(ApplicationConfig.CURRENT_SCHEMA_VERSION);
         assertThat(objectMapper().readTree(settingsFile.toFile()).has("connectionSettings")).isTrue();
         assertThat(objectMapper().readTree(settingsFile.toFile()).has("disabledConnections")).isTrue();
+        assertThat(objectMapper().readTree(settingsFile.toFile()).path("message").path("filter").path("type").size())
+                .isZero();
     }
 
     @Test
@@ -90,6 +93,7 @@ class ApplicationConfigStoreTest {
                         DashboardSettings.DEFAULT_SECTION_ORDER,
                         List.of("coin")
                 ),
+                new MessageSettings(new MessageFilter(List.of("battle_updated"))),
                 new ConnectionSettings(false, false, Duration.ofSeconds(5), Duration.ofHours(1)),
                 List.of(profile),
                 List.of(profile.characterId()),

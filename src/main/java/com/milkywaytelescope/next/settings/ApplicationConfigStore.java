@@ -54,6 +54,7 @@ public class ApplicationConfigStore {
         ApplicationConfig validated = new ApplicationConfig(
                 next.schemaVersion(),
                 next.dashboard(),
+                next.message(),
                 next.connectionSettings(),
                 next.connections(),
                 next.disabledConnections(),
