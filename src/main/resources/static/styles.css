@@ -504,9 +504,19 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .character-card .card-subpanel { padding: 10px; border-radius: 10px; }
     .activity-line > strong { font-size: 19px; }
     .task-line { gap: 6px 12px; margin-top: 6px; }
-    .slot-groups { gap: 5px; margin-top: 8px; }
-    .slot-list { gap: 4px; }
-    .slot-chip { min-width: 48px; min-height: 30px; padding: 3px 6px; }
+    .slot-groups { display: flex; gap: 4px; margin-top: 8px; }
+    .slot-group { flex: 1 1 0; gap: 0; }
+    .slot-list { flex: 1 1 auto; flex-wrap: nowrap; gap: 3px; }
+    .slot-chip {
+        flex: 1 1 0;
+        min-width: 0;
+        min-height: 26px;
+        padding: 2px 1px;
+        gap: 1px;
+        font-size: 9px;
+    }
+    .slot-chip .mwi-icon { width: 15px; height: 15px; }
+    .slot-chip .slot-index { width: 15px; height: 15px; font-size: 8px; }
     .battle-block { margin-top: 10px; padding-top: 10px; }
     .inventory-list { grid-template-columns: 1fr; gap: 5px; }
     .inventory-item { gap: 7px; padding: 6px 7px; }
