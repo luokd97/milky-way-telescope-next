@@ -34,7 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest(classes = TelescopeNextApplication.class)
 @AutoConfigureMockMvc
 @TestPropertySource(properties = {
-        "telescope.site-password=test-password",
+        "telescope.site-password-hash=$2y$10$RfIkr3SjErA3VrB5VsCOkeuyjbZE1qxLmiRQTvy2T.k1K9fgw2o8y",
         "telescope.storage.settings-file=${java.io.tmpdir}/telescope-next-security-settings-test.json",
 })
 class SecurityIntegrationTest {

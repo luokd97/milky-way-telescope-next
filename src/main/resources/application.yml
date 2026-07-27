@@ -24,6 +24,7 @@ management:
 
 telescope:
   site-password: ${MONITOR_SITE_PASSWORD:}
+  site-password-hash: ${MONITOR_SITE_PASSWORD_HASH:}
   remember-me-key: ${MONITOR_REMEMBER_ME_KEY:}
   storage:
     settings-file: ${TELESCOPE_SETTINGS_FILE:data/settings.json}

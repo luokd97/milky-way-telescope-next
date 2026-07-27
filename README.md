@@ -19,14 +19,18 @@ The monitor never sends game actions. Its only outbound WebSocket operation is t
 
 - Java 21
 - Maven 3.9+
-- A site password supplied through `MONITOR_SITE_PASSWORD`
+- A site password hash supplied through `MONITOR_SITE_PASSWORD_HASH`
 
 ## Run locally
 
 ```bash
-export MONITOR_SITE_PASSWORD='choose-a-local-password'
+export MONITOR_SITE_PASSWORD_HASH='<bcrypt-hash-for-your-site-password>'
+export MONITOR_REMEMBER_ME_KEY='choose-a-different-long-random-secret'
 mvn spring-boot:run
 ```
+
+Generate a BCrypt hash once with `htpasswd -nB owner`, then copy the value after `owner:` into
+`MONITOR_SITE_PASSWORD_HASH`. Keep both the hash and `MONITOR_REMEMBER_ME_KEY` unchanged across deployments.
 
 Open <http://127.0.0.1:8081>. WSS connections do not start automatically by default. Add or reconnect characters and configure the Dashboard from <http://127.0.0.1:8081/settings>.
 
@@ -84,8 +88,9 @@ reconnected later. Removing a profile from the configuration permanently deletes
 
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
-| `MONITOR_SITE_PASSWORD` | required | Password for the entire site |
-| `MONITOR_REMEMBER_ME_KEY` | falls back to `MONITOR_SITE_PASSWORD` | Optional stable key for 30-day Remember-Me login cookies |
+| `MONITOR_SITE_PASSWORD_HASH` | required for restart-stable login | BCrypt hash of the password for the entire site |
+| `MONITOR_SITE_PASSWORD` | empty | Legacy raw-password fallback; it regenerates a BCrypt hash on each boot and cannot preserve Remember-Me across restarts |
+| `MONITOR_REMEMBER_ME_KEY` | falls back to the configured password hash or legacy password | Stable key for 30-day Remember-Me login cookies; keep it unchanged |
 | `SERVER_ADDRESS` | `127.0.0.1` | HTTP bind address |
 | `SERVER_PORT` | `8081` | HTTP port |
 | `SESSION_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
@@ -142,7 +147,7 @@ cd /tmp
 sha256sum --check telescope-next.jar.sha256
 ```
 
-Run the service as a dedicated unprivileged user, bind it to `127.0.0.1:8081`, and expose it through an HTTPS reverse proxy. Keep `MONITOR_SITE_PASSWORD` in the systemd environment file and point `TELESCOPE_SETTINGS_FILE` at `/var/lib/telescope-next/settings.json`.
+Run the service as a dedicated unprivileged user, bind it to `127.0.0.1:8081`, and expose it through an HTTPS reverse proxy. Keep `MONITOR_SITE_PASSWORD_HASH` and `MONITOR_REMEMBER_ME_KEY` in the systemd environment file and point `TELESCOPE_SETTINGS_FILE` at `/var/lib/telescope-next/settings.json`.
 
 The `deploy/` directory contains a systemd unit, environment template, and release installer. On Debian, run the installer as root with an explicit tag:
 
@@ -155,7 +160,7 @@ The installer verifies the checksum and atomically replaces the JAR, but intenti
 ## Security
 
 - Every page and API except login and health requires authentication.
-- Successful logins are remembered for 30 days; set `MONITOR_REMEMBER_ME_KEY` to a separate stable secret if you want to rotate remembered logins independently of the site password.
+- Successful logins are remembered for 30 days. Use a stable `MONITOR_SITE_PASSWORD_HASH` and `MONITOR_REMEMBER_ME_KEY`; the legacy raw-password fallback cannot preserve Remember-Me tokens across application restarts.
 - Mutating requests require a CSRF token.
 - Dashboard API responses and runtime status views redact the connection hash and never return access tokens.
 - The complete plaintext configuration is available only through the authenticated, CSRF-protected Settings API.

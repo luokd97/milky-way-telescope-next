@@ -23,12 +23,18 @@ public class SecurityConfig {
 
     @Bean
     UserDetailsService userDetailsService(TelescopeProperties properties, PasswordEncoder encoder) {
-        String password = properties.getSitePassword();
-        if (password == null || password.isBlank()) {
-            throw new IllegalStateException("MONITOR_SITE_PASSWORD must be set");
+        String passwordHash = properties.getSitePasswordHash();
+        if (passwordHash == null || passwordHash.isBlank()) {
+            String password = properties.getSitePassword();
+            if (password == null || password.isBlank()) {
+                throw new IllegalStateException(
+                        "MONITOR_SITE_PASSWORD_HASH must be set (MONITOR_SITE_PASSWORD is legacy fallback)"
+                );
+            }
+            passwordHash = encoder.encode(password);
         }
         return new InMemoryUserDetailsManager(User.withUsername("owner")
-                .password(encoder.encode(password))
+                .password(passwordHash)
                 .roles("OWNER")
                 .build());
     }
@@ -37,7 +43,7 @@ public class SecurityConfig {
     SecurityFilterChain securityFilterChain(HttpSecurity http, TelescopeProperties properties) throws Exception {
         String configuredRememberMeKey = properties.getRememberMeKey();
         final String rememberMeKey = configuredRememberMeKey == null || configuredRememberMeKey.isBlank()
-                ? properties.getSitePassword()
+                ? fallbackRememberMeKey(properties)
                 : configuredRememberMeKey;
         http
                 .authorizeHttpRequests(authorize -> authorize
@@ -55,5 +61,15 @@ public class SecurityConfig {
                         .logoutSuccessUrl("/login?logout")
                         .permitAll());
         return http.build();
+    }
+
+    private static String fallbackRememberMeKey(TelescopeProperties properties) {
+        if (properties.getSitePasswordHash() != null && !properties.getSitePasswordHash().isBlank()) {
+            return properties.getSitePasswordHash();
+        }
+        if (properties.getSitePassword() != null && !properties.getSitePassword().isBlank()) {
+            return properties.getSitePassword();
+        }
+        throw new IllegalStateException("MONITOR_REMEMBER_ME_KEY must be set");
     }
 }
