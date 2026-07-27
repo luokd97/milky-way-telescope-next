@@ -2,7 +2,7 @@ const state = {
   dashboard: null,
   polling: false,
   diagnosticCharacterId: null,
-  diagnosticExpandedMessageKey: null,
+  diagnosticPopoverMessageKey: null,
   diagnosticRawCache: new Map(),
   diagnosticRawErrors: new Map(),
   diagnosticRawLoading: new Set(),
@@ -30,17 +30,40 @@ document.addEventListener("DOMContentLoaded", () => {
   const diagnosticsOpen = document.getElementById("diagnostics-open");
   const diagnosticsClose = document.getElementById("diagnostics-close");
   const diagnosticsMessages = document.getElementById("diagnostic-messages");
+  const diagnosticsRawClose = document.getElementById("diagnostic-raw-close");
 
   diagnosticsOpen.addEventListener("click", () => {
     if (!diagnosticsDialog.open) diagnosticsDialog.showModal();
   });
-  diagnosticsClose.addEventListener("click", () => diagnosticsDialog.close());
-  diagnosticsDialog.addEventListener("click", event => {
-    if (event.target === diagnosticsDialog) diagnosticsDialog.close();
+  diagnosticsClose.addEventListener("click", () => {
+    closeDiagnosticRawPopover();
+    diagnosticsDialog.close();
   });
-  diagnosticsDialog.addEventListener("close", () => diagnosticsOpen.focus());
+  diagnosticsDialog.addEventListener("click", event => {
+    if (event.target === diagnosticsDialog) {
+      closeDiagnosticRawPopover();
+      diagnosticsDialog.close();
+    } else if (isDiagnosticRawPopoverOpen()
+        && !event.target.closest("[data-diagnostic-message]")
+        && !event.target.closest("#diagnostic-raw-popover")) {
+      closeDiagnosticRawPopover();
+    }
+  });
+  diagnosticsDialog.addEventListener("close", () => {
+    state.diagnosticPopoverMessageKey = null;
+    hideDiagnosticRawPopover();
+    diagnosticsOpen.focus();
+  });
+  diagnosticsRawClose.addEventListener("click", closeDiagnosticRawPopover);
   diagnosticsMessages.addEventListener("click", handleDiagnosticMessageClick);
   diagnosticsMessages.addEventListener("keydown", handleDiagnosticMessageKeydown);
+  diagnosticsDialog.addEventListener("keydown", event => {
+    if (event.key === "Escape" && isDiagnosticRawPopoverOpen()) {
+      event.preventDefault();
+      event.stopPropagation();
+      closeDiagnosticRawPopover();
+    }
+  });
 
   document.getElementById("diagnostic-character").addEventListener("change", event => {
     state.diagnosticCharacterId = event.target.value || null;
@@ -662,7 +685,8 @@ function renderDiagnostics(dashboard) {
   const characters = dashboard?.characters || [];
   const select = document.getElementById("diagnostic-character");
   if (!characters.length) {
-    state.diagnosticExpandedMessageKey = null;
+    state.diagnosticPopoverMessageKey = null;
+    hideDiagnosticRawPopover();
     setElementHtml(select, `<option value="">No characters</option>`);
     select.disabled = true;
     setText("diagnostic-count", "0 messages");
@@ -686,13 +710,14 @@ function renderDiagnostics(dashboard) {
     characterId(snapshot, index) === state.diagnosticCharacterId);
   const messages = selected?.recentMessages || [];
   const generation = selected?.connection?.generation ?? "unknown";
-  if (state.diagnosticExpandedMessageKey
+  if (state.diagnosticPopoverMessageKey
       && !messages.some(message => diagnosticMessageKey(
         state.diagnosticCharacterId,
         generation,
         message.sequence,
-      ) === state.diagnosticExpandedMessageKey)) {
-    state.diagnosticExpandedMessageKey = null;
+      ) === state.diagnosticPopoverMessageKey)) {
+    state.diagnosticPopoverMessageKey = null;
+    hideDiagnosticRawPopover();
   }
   const lastMessage = selected?.connection?.lastMessageAt
     ? ` · Last message ${formatRelativeTime(selected.connection.lastMessageAt)}`
@@ -711,53 +736,48 @@ function renderDiagnostics(dashboard) {
       )).join("")
       : `<tr><td colspan="3" class="empty-cell">No messages in this session.</td></tr>`,
   );
+  renderDiagnosticRawPopover();
 }
 
 function diagnosticMessageRows(message, characterIdValue, generation) {
   const key = diagnosticMessageKey(characterIdValue, generation, message.sequence);
-  const expanded = state.diagnosticExpandedMessageKey === key;
+  const active = state.diagnosticPopoverMessageKey === key;
   const escapedKey = escapeHtml(key);
   const escapedCharacterId = escapeHtml(characterIdValue);
   const escapedGeneration = escapeHtml(generation);
   const escapedSequence = escapeHtml(message.sequence);
   return `
-      <tr class="message-row${expanded ? " is-expanded" : ""}"
+      <tr class="message-row${active ? " is-active" : ""}"
           data-diagnostic-message="true"
           data-message-key="${escapedKey}"
           data-character-id="${escapedCharacterId}"
           data-generation="${escapedGeneration}"
           data-sequence="${escapedSequence}"
+          data-message-type="${escapeHtml(message.type || "unknown")}"
+          data-message-time="${escapeHtml(formatTime(message.receivedAt))}"
           tabindex="0"
-          aria-expanded="${expanded}"
-          title="Click to ${expanded ? "hide" : "show"} raw data">
+          aria-haspopup="dialog"
+          aria-expanded="${active}"
+          title="Click to view raw data">
         <td>${escapeHtml(formatTime(message.receivedAt))}</td>
         <td><code>${escapeHtml(message.type || "unknown")}</code></td>
         <td>${escapeHtml(formatNumber(message.byteLength))}</td>
-      </tr>${expanded ? diagnosticRawMessageRow(key) : ""}`;
+      </tr>`;
 }
 
-function diagnosticRawMessageRow(key) {
+function diagnosticRawMessageContent(key) {
   if (state.diagnosticRawLoading.has(key)) {
-    return `
-      <tr class="message-raw-row">
-        <td colspan="3"><div class="diagnostic-raw-state">Loading raw data…</div></td>
-      </tr>`;
+    return `<div class="diagnostic-raw-state">Loading raw data…</div>`;
   }
 
   const error = state.diagnosticRawErrors.get(key);
   if (error) {
-    return `
-      <tr class="message-raw-row">
-        <td colspan="3"><div class="diagnostic-raw-state error">${escapeHtml(error)}</div></td>
-      </tr>`;
+    return `<div class="diagnostic-raw-state error">${escapeHtml(error)}</div>`;
   }
 
   const message = state.diagnosticRawCache.get(key);
   if (!message) {
-    return `
-      <tr class="message-raw-row">
-        <td colspan="3"><div class="diagnostic-raw-state">Loading raw data…</div></td>
-      </tr>`;
+    return `<div class="diagnostic-raw-state">Loading raw data…</div>`;
   }
 
   if (message.payload == null) {
@@ -766,16 +786,10 @@ function diagnosticRawMessageRow(key) {
       : message.type === "oversized"
         ? "Raw data unavailable: payload exceeded the configured retention limit."
         : "Raw data unavailable for this message.";
-    return `
-      <tr class="message-raw-row">
-        <td colspan="3"><div class="diagnostic-raw-state">${escapeHtml(reason)}</div></td>
-      </tr>`;
+    return `<div class="diagnostic-raw-state">${escapeHtml(reason)}</div>`;
   }
 
-  return `
-      <tr class="message-raw-row">
-        <td colspan="3"><pre class="diagnostic-raw">${escapeHtml(formatRawPayload(message.payload))}</pre></td>
-      </tr>`;
+  return `<pre class="diagnostic-raw">${escapeHtml(formatRawPayload(message.payload))}</pre>`;
 }
 
 function handleDiagnosticMessageClick(event) {
@@ -796,13 +810,12 @@ function toggleDiagnosticMessage(row) {
   const key = row.dataset.messageKey;
   if (!key) return;
 
-  if (state.diagnosticExpandedMessageKey === key) {
-    state.diagnosticExpandedMessageKey = null;
-    renderDiagnostics(state.dashboard);
+  if (state.diagnosticPopoverMessageKey === key) {
+    closeDiagnosticRawPopover();
     return;
   }
 
-  state.diagnosticExpandedMessageKey = key;
+  state.diagnosticPopoverMessageKey = key;
   renderDiagnostics(state.dashboard);
   ensureDiagnosticRawData(
     key,
@@ -811,36 +824,80 @@ function toggleDiagnosticMessage(row) {
   );
 }
 
-async function ensureDiagnosticRawData(key, characterIdValue, generation) {
+function closeDiagnosticRawPopover() {
+  if (!state.diagnosticPopoverMessageKey) {
+    hideDiagnosticRawPopover();
+    return;
+  }
+  state.diagnosticPopoverMessageKey = null;
+  hideDiagnosticRawPopover();
+  if (state.dashboard) renderDiagnostics(state.dashboard);
+}
+
+function hideDiagnosticRawPopover() {
+  const popover = document.getElementById("diagnostic-raw-popover");
+  if (!popover) return;
+  popover.hidden = true;
+}
+
+function isDiagnosticRawPopoverOpen() {
+  const popover = document.getElementById("diagnostic-raw-popover");
+  return Boolean(popover && !popover.hidden && state.diagnosticPopoverMessageKey);
+}
+
+function renderDiagnosticRawPopover() {
+  const popover = document.getElementById("diagnostic-raw-popover");
+  if (!popover || !state.diagnosticPopoverMessageKey) {
+    hideDiagnosticRawPopover();
+    return;
+  }
+
+  const row = Array.from(document.querySelectorAll("[data-diagnostic-message]"))
+    .find(element => element.dataset.messageKey === state.diagnosticPopoverMessageKey);
+  if (!row) {
+    state.diagnosticPopoverMessageKey = null;
+    hideDiagnosticRawPopover();
+    return;
+  }
+
+  setText("diagnostic-raw-title", `${row.dataset.messageType} · ${row.dataset.messageTime}`);
+  setHtml("diagnostic-raw-content", diagnosticRawMessageContent(state.diagnosticPopoverMessageKey));
+  popover.hidden = false;
+}
+
+function ensureDiagnosticRawData(key, characterIdValue, generation) {
   if (state.diagnosticRawCache.has(key) || state.diagnosticRawLoading.has(key)) return;
 
   state.diagnosticRawErrors.delete(key);
   state.diagnosticRawLoading.add(key);
-  renderDiagnostics(state.dashboard);
+  renderDiagnosticRawPopover();
 
-  try {
-    const response = await fetch(
-      `/api/characters/${encodeURIComponent(characterIdValue)}/messages?limit=20&includePayload=true`,
-      { cache: "no-store" },
-    );
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-    const messages = await response.json();
-    messages.forEach(message => {
-      state.diagnosticRawCache.set(
-        diagnosticMessageKey(characterIdValue, generation, message.sequence),
-        message,
-      );
+  fetch(
+    `/api/characters/${encodeURIComponent(characterIdValue)}/messages?limit=20&includePayload=true`,
+    { cache: "no-store" },
+  )
+    .then(response => {
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      return response.json();
+    })
+    .then(messages => {
+      messages.forEach(message => {
+        state.diagnosticRawCache.set(
+          diagnosticMessageKey(characterIdValue, generation, message.sequence),
+          message,
+        );
+      });
+      if (!state.diagnosticRawCache.has(key)) {
+        state.diagnosticRawErrors.set(key, "Raw data is no longer available for this message.");
+      }
+    })
+    .catch(error => {
+      state.diagnosticRawErrors.set(key, `Unable to load raw data: ${error.message}`);
+    })
+    .finally(() => {
+      state.diagnosticRawLoading.delete(key);
+      renderDiagnosticRawPopover();
     });
-    if (!state.diagnosticRawCache.has(key)) {
-      state.diagnosticRawErrors.set(key, "Raw data is no longer available for this message.");
-    }
-  } catch (error) {
-    state.diagnosticRawErrors.set(key, `Unable to load raw data: ${error.message}`);
-  } finally {
-    state.diagnosticRawLoading.delete(key);
-    renderDiagnostics(state.dashboard);
-  }
 }
 
 function diagnosticMessageKey(characterIdValue, generation, sequence) {

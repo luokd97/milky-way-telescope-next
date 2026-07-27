@@ -395,14 +395,45 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
 .messages-table .message-row { cursor: pointer; }
 .messages-table .message-row:hover td,
 .messages-table .message-row:focus-visible td,
-.messages-table .message-row.is-expanded td { background: rgba(97, 217, 200, .07); }
+.messages-table .message-row.is-active td { background: rgba(97, 217, 200, .07); }
 .messages-table .message-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.messages-table .message-row.is-expanded td { border-bottom-color: transparent; }
-.messages-table .message-raw-row td { padding: 0 8px 12px; background: rgba(97, 217, 200, .07); }
-.diagnostic-raw {
-    max-height: min(360px, 42vh);
+.diagnostic-raw-popover {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    z-index: 20;
+    width: min(680px, calc(100vw - 32px));
+    max-height: min(520px, calc(100dvh - 32px));
     margin: 0;
-    overflow: auto;
+    overflow: hidden;
+    border: 1px solid var(--accent);
+    border-radius: 12px;
+    background: rgba(14, 28, 43, .98);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, .48), 0 0 0 4px rgba(97, 217, 200, .09);
+    transform: translate(-50%, -50%);
+}
+.diagnostic-raw-popover[hidden] { display: none; }
+.diagnostic-raw-popover-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+}
+.diagnostic-raw-popover-header > div { display: grid; gap: 2px; min-width: 0; }
+.diagnostic-raw-popover-header h3 {
+    overflow: hidden;
+    color: var(--text);
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.diagnostic-raw-popover .dialog-close-button { width: 30px; min-height: 30px; padding: 5px; }
+.diagnostic-raw-popover .dialog-close-button svg { width: 16px; height: 16px; }
+.diagnostic-raw-content { max-height: calc(min(520px, 100dvh - 32px) - 65px); overflow: auto; padding: 12px; }
+.diagnostic-raw {
+    margin: 0;
     padding: 12px;
     border: 1px solid var(--border-soft);
     border-radius: 9px;
