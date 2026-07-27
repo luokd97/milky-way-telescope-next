@@ -487,6 +487,7 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
 @media (max-width: 540px) {
     .mode-badge { font-size: 0; }
     .mode-badge::after { content: attr(data-mobile-label); font-size: 11px; }
+    .slot-group[data-slot-group="food"] .slot-group-label,
     .slot-group[data-slot-group="drinks"] .slot-group-label { display: none; }
     .page-shell { width: min(100% - 20px, 1480px); margin-top: 12px; margin-bottom: 40px; }
     .session-footer {
