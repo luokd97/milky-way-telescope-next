@@ -248,7 +248,6 @@ button:disabled {
 .character-name-line { display: flex; align-items: center; gap: 8px; }
 .character-name-line h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .character-reference { flex-shrink: 0; color: var(--muted); font-size: 11px; font-weight: 750; white-space: nowrap; }
-.character-meta { margin-top: 5px; font-size: 12px; }
 .mode-badge { padding: 2px 6px; border-radius: 5px; background: #213c51; color: #c8e8ff; font-size: 11px; font-weight: 800; }
 .status-stack { display: grid; justify-items: end; gap: 6px; flex-shrink: 0; }
 
@@ -301,6 +300,21 @@ button:disabled {
 .slot-chip.low { border-color: #85682c; background: #40371f; color: #ffe39b; }
 .slot-chip.empty { color: var(--muted); }
 .slot-index { display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; background: rgba(255, 255, 255, .06); font-size: 10px; }
+
+.battle-block .slot-groups { display: flex; gap: 4px; margin-top: 8px; }
+.battle-block .slot-group { flex: 1 1 0; gap: 0; }
+.battle-block .slot-group-label { display: none; }
+.battle-block .slot-list { flex: 1 1 auto; flex-wrap: nowrap; gap: 3px; }
+.battle-block .slot-chip {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 26px;
+    padding: 2px 1px;
+    gap: 1px;
+    font-size: 9px;
+}
+.battle-block .slot-chip .mwi-icon { width: 15px; height: 15px; }
+.battle-block .slot-chip .slot-index { width: 15px; height: 15px; font-size: 8px; }
 
 .battle-block { margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--border); }
 .battle-line { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
@@ -576,7 +590,6 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     }
     .character-card { padding: 12px; border-radius: 14px; }
     .character-card-header { gap: 8px; }
-    .character-meta { max-width: 250px; }
     .card-sections { gap: 8px; margin-top: 8px; }
     .character-card .card-subpanel { padding: 10px; border-radius: 10px; }
     .activity-line > strong { font-size: 19px; }

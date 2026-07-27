@@ -243,7 +243,6 @@ function createCharacterCard() {
             </span>
             <span class="mode-badge" data-field="character-mode" hidden></span>
           </div>
-          <p class="character-meta muted" data-field="status-detail"></p>
         </div>
         <div class="status-stack">
           <span class="status" data-field="character-status"></span>
@@ -345,11 +344,9 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   }
   setHidden(modeElement, !mode);
 
-  const status = characterStatus(connection, dataStatus, snapshot.dataUpdatedAt);
+  const status = characterStatus(connection, dataStatus);
   setElementClass(field("character-status"), `status ${status.className}`);
   setElementText(field("character-status"), status.label);
-  setElementText(field("status-detail"), status.detail);
-  setHidden(field("status-detail"), !status.detail);
   setElementHtml(field("notices"), noticesHtml(connection));
 
   const activeQueued = actions.filter(item => item.done !== true && item.current !== true).length;
@@ -1156,32 +1153,24 @@ function characterId(snapshot, index) {
   return String(snapshot?.connection?.characterId ?? snapshot?.character?.id ?? `character-${index}`);
 }
 
-function characterStatus(connection, dataStatus, dataUpdatedAt) {
+function characterStatus(connection, dataStatus) {
   const connectionState = connection?.status || "idle";
   const hasSavedData = dataStatus === "live" || dataStatus === "stale";
-  const lastUpdate = dataUpdatedAt ? `Updated ${formatRelativeTime(dataUpdatedAt)}` : "Update time unavailable";
-  const cachedData = dataUpdatedAt ? `Cached · ${lastUpdate}` : "Cached";
 
   if (connectionState === "yielded") {
     return {
       className: "yielded",
       label: "Yielded",
-      detail: hasSavedData ? cachedData : "",
     };
   }
 
   if (connection?.connected) {
     if (dataStatus === "live") {
-      return { className: "online", label: "Online", detail: lastUpdate };
+      return { className: "online", label: "Online" };
     }
     return {
       className: "syncing",
       label: "Syncing",
-      detail: dataStatus === "stale"
-        ? dataUpdatedAt
-          ? cachedData
-          : "Waiting for fresh data"
-        : "Waiting for data",
     };
   }
 
@@ -1189,14 +1178,12 @@ function characterStatus(connection, dataStatus, dataUpdatedAt) {
     return {
       className: "reconnecting",
       label: hasSavedData ? "Reconnecting" : "Connecting",
-      detail: hasSavedData ? cachedData : "Waiting for data",
     };
   }
 
   return {
     className: "offline",
     label: "Offline",
-    detail: hasSavedData ? cachedData : "No data yet",
   };
 }
 
@@ -1282,9 +1269,7 @@ function elapsedMilliseconds(value) {
 
 function formatPerHour(count, elapsed) {
   if (!elapsed || elapsed < 1000) return "—";
-  return (Number(count || 0) * 3600000 / elapsed).toLocaleString(undefined, {
-    maximumFractionDigits: 1,
-  });
+  return formatPlainNumber(Number(count || 0) * 3600000 / elapsed, 1);
 }
 
 function formatElapsed(milliseconds) {
@@ -1296,16 +1281,18 @@ function formatElapsed(milliseconds) {
 }
 
 function formatNumber(value) {
-  const number = Number(value);
-  return Number.isFinite(number) ? number.toLocaleString() : "0";
+  return formatPlainNumber(value, 3);
 }
 
 function formatItemCount(value) {
+  return formatPlainNumber(value, 2);
+}
+
+function formatPlainNumber(value, maximumFractionDigits) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "0";
-  return number.toLocaleString(undefined, {
-    maximumFractionDigits: Number.isInteger(number) ? 0 : 2,
-  });
+  if (Number.isInteger(number)) return String(number);
+  return String(Number(number.toFixed(maximumFractionDigits)));
 }
 
 function setText(id, value) {
