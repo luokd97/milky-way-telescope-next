@@ -6,6 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "telescope")
 public class TelescopeProperties {
     private String sitePassword = "";
+    private String rememberMeKey = "";
     private final Storage storage = new Storage();
     private final Message message = new Message();
     private final State state = new State();
@@ -17,6 +18,14 @@ public class TelescopeProperties {
 
     public void setSitePassword(String sitePassword) {
         this.sitePassword = sitePassword;
+    }
+
+    public String getRememberMeKey() {
+        return rememberMeKey;
+    }
+
+    public void setRememberMeKey(String rememberMeKey) {
+        this.rememberMeKey = rememberMeKey;
     }
 
     public Storage getStorage() {

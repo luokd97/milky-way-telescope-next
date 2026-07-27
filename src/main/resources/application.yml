@@ -4,6 +4,7 @@ server:
   forward-headers-strategy: framework
   servlet:
     session:
+      timeout: 30m
       cookie:
         http-only: true
         secure: ${SESSION_COOKIE_SECURE:false}
@@ -23,6 +24,7 @@ management:
 
 telescope:
   site-password: ${MONITOR_SITE_PASSWORD:}
+  remember-me-key: ${MONITOR_REMEMBER_ME_KEY:}
   storage:
     settings-file: ${TELESCOPE_SETTINGS_FILE:data/settings.json}
   message:

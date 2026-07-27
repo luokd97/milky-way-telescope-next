@@ -20,6 +20,7 @@ import com.milkywaytelescope.next.settings.ApplicationConfigStore;
 import com.milkywaytelescope.next.settings.ConnectionSettings;
 import com.milkywaytelescope.next.settings.DashboardSettings;
 import com.milkywaytelescope.next.state.ConnectionRegistry;
+import jakarta.servlet.http.Cookie;
 import java.util.List;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.Test;
@@ -63,6 +64,24 @@ class SecurityIntegrationTest {
         mockMvc.perform(get("/admin").with(user("owner").roles("OWNER")))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(redirectedUrl("/settings"));
+    }
+
+    @Test
+    void remembersSuccessfulLoginForThirtyDays() throws Exception {
+        var login = mockMvc.perform(post("/login")
+                        .param("username", "owner")
+                        .param("password", "test-password")
+                        .with(csrf()))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/"))
+                .andReturn();
+
+        Cookie rememberMe = login.getResponse().getCookie("remember-me");
+        assertThat(rememberMe).isNotNull();
+        assertThat(rememberMe.getMaxAge()).isEqualTo(30 * 24 * 60 * 60);
+
+        mockMvc.perform(get("/api/dashboard").cookie(rememberMe))
+                .andExpect(status().isOk());
     }
 
     @Test

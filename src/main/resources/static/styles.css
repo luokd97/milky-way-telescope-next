@@ -463,8 +463,23 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
 .runtime-panel .connection-list { margin-top: 14px; }
 .connection-row { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); }
 .connection-row code { display: block; overflow-wrap: anywhere; color: var(--muted); margin-top: 8px; }
-.login-page { display: grid; place-items: center; padding: 24px; }
-.login-card { width: min(420px, 100%); border: 1px solid var(--border); background: var(--panel); border-radius: 18px; padding: 28px; box-shadow: var(--shadow); }
+.login-page { display: grid; place-items: center; padding: 16px; }
+.login-card {
+    width: min(360px, 100%);
+    border: 1px solid var(--border);
+    background: var(--panel);
+    border-radius: 14px;
+    padding: 20px;
+    box-shadow: var(--shadow);
+}
+.login-card h1 { font-size: 26px; }
+.login-card label { gap: 5px; margin: 14px 0; }
+.login-card input[readonly] {
+    background: var(--panel-strong);
+    color: var(--muted);
+    cursor: default;
+}
+.login-card button { width: 100%; min-height: 42px; }
 
 @media (min-width: 821px) {
     @supports (grid-template-rows: subgrid) {

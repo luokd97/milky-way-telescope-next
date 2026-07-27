@@ -8,13 +8,14 @@
 </head>
 <body class="login-page">
 <main class="login-card">
-    <p class="eyebrow">Milky Way Telescope</p>
-    <h1>Observer access</h1>
-    <p class="muted">Enter the site password to open the private monitor.</p>
+    <h1>Sign in</h1>
     <p class="notice error" th:if="${param.error}">Incorrect password.</p>
     <p class="notice" th:if="${param.logout}">Signed out.</p>
     <form method="post" action="/login">
-        <input type="hidden" name="username" value="owner">
+        <label>
+            <span>Username</span>
+            <input name="username" type="text" value="owner" autocomplete="username" readonly>
+        </label>
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
         <label>
             <span>Password</span>

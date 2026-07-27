@@ -1,6 +1,7 @@
 package com.milkywaytelescope.next.security;
 
 import com.milkywaytelescope.next.config.TelescopeProperties;
+import java.time.Duration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -13,6 +14,8 @@ import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
 public class SecurityConfig {
+    private static final int REMEMBER_ME_VALIDITY_SECONDS = (int) Duration.ofDays(30).toSeconds();
+
     @Bean
     PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -31,7 +34,11 @@ public class SecurityConfig {
     }
 
     @Bean
-    SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    SecurityFilterChain securityFilterChain(HttpSecurity http, TelescopeProperties properties) throws Exception {
+        String configuredRememberMeKey = properties.getRememberMeKey();
+        final String rememberMeKey = configuredRememberMeKey == null || configuredRememberMeKey.isBlank()
+                ? properties.getSitePassword()
+                : configuredRememberMeKey;
         http
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/login", "/styles.css", "/actuator/health", "/error").permitAll()
@@ -40,6 +47,10 @@ public class SecurityConfig {
                         .loginPage("/login")
                         .defaultSuccessUrl("/", true)
                         .permitAll())
+                .rememberMe(rememberMe -> rememberMe
+                        .key(rememberMeKey)
+                        .tokenValiditySeconds(REMEMBER_ME_VALIDITY_SECONDS)
+                        .alwaysRemember(true))
                 .logout(logout -> logout
                         .logoutSuccessUrl("/login?logout")
                         .permitAll());

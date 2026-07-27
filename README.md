@@ -85,6 +85,7 @@ reconnected later. Removing a profile from the configuration permanently deletes
 | Environment variable | Default | Purpose |
 | --- | --- | --- |
 | `MONITOR_SITE_PASSWORD` | required | Password for the entire site |
+| `MONITOR_REMEMBER_ME_KEY` | falls back to `MONITOR_SITE_PASSWORD` | Optional stable key for 30-day Remember-Me login cookies |
 | `SERVER_ADDRESS` | `127.0.0.1` | HTTP bind address |
 | `SERVER_PORT` | `8081` | HTTP port |
 | `SESSION_COOKIE_SECURE` | `false` | Set to `true` behind production HTTPS |
@@ -154,6 +155,7 @@ The installer verifies the checksum and atomically replaces the JAR, but intenti
 ## Security
 
 - Every page and API except login and health requires authentication.
+- Successful logins are remembered for 30 days; set `MONITOR_REMEMBER_ME_KEY` to a separate stable secret if you want to rotate remembered logins independently of the site password.
 - Mutating requests require a CSRF token.
 - Dashboard API responses and runtime status views redact the connection hash and never return access tokens.
 - The complete plaintext configuration is available only through the authenticated, CSRF-protected Settings API.
