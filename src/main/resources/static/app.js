@@ -232,10 +232,10 @@ function createCharacterCard() {
   card.className = "character-card";
   card.dataset.detailsExpanded = "false";
   card.innerHTML = `
-    <div class="character-card-intro" data-card-summary="true"
-        role="button" tabindex="0" aria-expanded="false">
+    <div class="character-card-intro">
       <header class="character-card-header">
-        <div class="character-identity">
+        <div class="character-identity" data-card-summary="true"
+            role="button" tabindex="0" aria-expanded="false">
           <div class="character-name-line">
             <h2 data-field="character-name"></h2>
             <span class="character-reference">
@@ -244,6 +244,9 @@ function createCharacterCard() {
             <span class="mode-badge" data-field="character-mode" hidden></span>
           </div>
         </div>
+        <button class="character-alert-count" type="button"
+            data-field="character-alert-count" data-card-action="show-recent-alerts"
+            aria-label="View recent alerts" hidden></button>
         <div class="status-stack">
           <span class="status" data-field="character-status"></span>
         </div>
@@ -298,7 +301,8 @@ function createCharacterCard() {
         </div>
       </section>
 
-      <section class="card-subpanel event-panel" data-dashboard-section="recentAlerts">
+      <section class="card-subpanel event-panel" data-dashboard-section="recentAlerts"
+          tabindex="-1">
         <div class="section-heading">
           <span>Recent alerts</span>
           <span class="section-heading-actions">
@@ -323,9 +327,13 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   const field = name => card.querySelector(`[data-field="${name}"]`);
 
   card.dataset.characterId = id;
-  const detailsId = `character-card-details-${String(id).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+  const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, "-");
+  const detailsId = `character-card-details-${safeId}`;
+  const alertsId = `character-card-alerts-${safeId}`;
   const detailsRoot = card.querySelector(".card-sections");
   detailsRoot.id = detailsId;
+  card.querySelector("[data-dashboard-section='recentAlerts']").id = alertsId;
+  field("character-alert-count").setAttribute("aria-controls", alertsId);
   if (card.dataset.detailsExpanded !== "true") {
     card.dataset.detailsExpanded = "false";
   }
@@ -397,6 +405,10 @@ async function handleCardAction(event) {
       await clearRecentAlerts(card);
       return;
     }
+    if (button.dataset.cardAction === "show-recent-alerts") {
+      showRecentAlerts(card);
+      return;
+    }
     if (button.dataset.cardAction !== "toggle-action-queue") return;
 
     const expanded = card.dataset.actionQueueExpanded === "true";
@@ -416,6 +428,7 @@ async function handleCardAction(event) {
 
 function handleCardSummaryKeydown(event) {
   if (event.key !== "Enter" && event.key !== " ") return;
+  if (event.target.closest("button")) return;
   const summary = event.target.closest("[data-card-summary]");
   const card = summary?.closest(".character-card");
   if (!card || !isMobileViewport()) return;
@@ -438,6 +451,22 @@ function setCardDetailsExpanded(card, expanded) {
     "aria-label",
     expanded ? `Collapse ${name} details` : `Show more ${name} details`,
   );
+}
+
+function showRecentAlerts(card) {
+  const alertsPanel = card.querySelector("[data-dashboard-section='recentAlerts']");
+  if (!alertsPanel) return;
+
+  if (isMobileViewport()) {
+    setCardDetailsExpanded(card, true);
+  }
+  window.requestAnimationFrame(() => {
+    alertsPanel.scrollIntoView({
+      behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth",
+      block: "center",
+    });
+    alertsPanel.focus({ preventScroll: true });
+  });
 }
 
 function updateCardSummaryState(card, detailsId, characterName) {
@@ -596,6 +625,7 @@ function updateActionQueue(card, actions) {
 function updateEvents(card, events) {
   const root = card.querySelector("[data-field='events']");
   const clearButton = card.querySelector("[data-field='event-clear']");
+  const alertCountButton = card.querySelector("[data-field='character-alert-count']");
   const visibleEvents = events.slice(0, 8);
   setElementText(
     card.querySelector("[data-field='event-count']"),
@@ -603,6 +633,14 @@ function updateEvents(card, events) {
   );
   const hasEvents = events.length > 0;
   const clearing = state.clearingAlerts.has(card.dataset.characterId);
+  setElementText(alertCountButton, events.length);
+  setHidden(alertCountButton, !hasEvents);
+  alertCountButton.setAttribute(
+    "aria-label",
+    `View ${events.length} recent alert${events.length === 1 ? "" : "s"} for ${
+      card.querySelector("[data-field='character-name']")?.textContent || "character"
+    }`,
+  );
   setHidden(clearButton, !hasEvents);
   clearButton.disabled = clearing;
   setElementText(clearButton, clearing ? "Clearing…" : "Clear");
@@ -628,13 +666,6 @@ function updateEvents(card, events) {
 async function clearRecentAlerts(card) {
   const characterId = card.dataset.characterId;
   if (!characterId || state.clearingAlerts.has(characterId)) return;
-
-  const characterName = card.querySelector("[data-field='character-name']")?.textContent || characterId;
-  if (!window.confirm(
-    `Clear current recent alerts for ${characterName}? This will not affect game data.`,
-  )) {
-    return;
-  }
 
   state.clearingAlerts.add(characterId);
   const button = card.querySelector("[data-field='event-clear']");

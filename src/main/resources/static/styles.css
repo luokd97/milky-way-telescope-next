@@ -249,6 +249,29 @@ button:disabled {
 .character-name-line h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .character-reference { flex-shrink: 0; color: var(--muted); font-size: 11px; font-weight: 750; white-space: nowrap; }
 .mode-badge { padding: 2px 6px; border-radius: 5px; background: #213c51; color: #c8e8ff; font-size: 11px; font-weight: 800; }
+.character-alert-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: 0 0 auto;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 5px;
+    border: 1px solid rgba(255, 140, 155, .45);
+    border-radius: 999px;
+    background: rgba(255, 140, 155, .12);
+    color: var(--red);
+    font-size: 10px;
+    font-weight: 850;
+    line-height: 1;
+}
+.character-alert-count:hover,
+.character-alert-count:focus-visible {
+    border-color: rgba(255, 140, 155, .8);
+    background: rgba(255, 140, 155, .2);
+    color: #ffb4bf;
+}
+.character-alert-count[hidden] { display: none; }
 .status-stack { display: grid; justify-items: end; gap: 6px; flex-shrink: 0; }
 
 .status,
@@ -344,6 +367,10 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
 .empty-inline { color: var(--muted); font-size: 12px; }
 
 .event-list { display: grid; gap: 7px; }
+.event-panel:focus {
+    outline: 2px solid rgba(255, 140, 155, .72);
+    outline-offset: 3px;
+}
 .event-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 8px; border: 1px solid #5d4b25; border-radius: 9px; background: rgba(74, 58, 27, .35); }
 .event-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .event-item > span { display: grid; min-width: 0; }
@@ -559,8 +586,8 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
         display: none;
     }
 
-    .character-card-intro { cursor: pointer; touch-action: manipulation; }
-    .character-card-intro[role="button"]:focus-visible {
+    [data-card-summary] { cursor: pointer; touch-action: manipulation; }
+    [data-card-summary][role="button"]:focus-visible {
         outline: 2px solid var(--accent);
         outline-offset: 4px;
         border-radius: 8px;
