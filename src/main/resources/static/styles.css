@@ -457,6 +457,35 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
 .notice { margin-top: 12px; border-radius: 9px; background: #183750; padding: 9px 11px; font-size: 12px; }
 .notice.error { background: #4b2431; color: #ffd2da; }
 .notice.warning { background: #493c18; color: #ffe39b; }
+.connection-control {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px 12px;
+    margin-top: 12px;
+}
+.connection-control-copy {
+    flex: 1 1 160px;
+    min-width: 0;
+    font-weight: 750;
+}
+.connection-control-actions {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+.connection-control-actions button {
+    min-height: 32px;
+    padding: 6px 9px;
+    font-size: 12px;
+    white-space: nowrap;
+}
+.connection-control-offline { justify-content: flex-end; }
+.connection-action-error { margin-top: 8px; }
 
 .settings-layout { display: grid; gap: 24px; }
 .settings-page {
@@ -633,6 +662,14 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .inventory-item { gap: 7px; padding: 6px 7px; }
     .event-list { gap: 5px; }
     .event-row { gap: 8px; padding: 6px 7px; }
+    .connection-control { align-items: stretch; }
+    .connection-control-copy { flex-basis: 100%; }
+    .connection-control-actions { flex: 1 1 100%; }
+    .connection-control-actions button {
+        flex: 1 1 0;
+        min-width: 0;
+        padding-inline: 6px;
+    }
     .diagnostics-dialog-header,
     .diagnostics-body { padding-left: 15px; padding-right: 15px; }
     .settings-layout { gap: 16px; }

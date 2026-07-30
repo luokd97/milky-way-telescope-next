@@ -8,6 +8,8 @@ const state = {
   diagnosticRawLoading: new Set(),
   csrf: null,
   clearingAlerts: new Set(),
+  connectionActions: new Map(),
+  connectionActionErrors: new Map(),
 };
 
 const grid = document.getElementById("character-grid");
@@ -341,7 +343,7 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   const status = characterStatus(connection, dataStatus);
   setElementClass(field("character-status"), `status ${status.className}`);
   setElementText(field("character-status"), status.label);
-  setElementHtml(field("notices"), noticesHtml(connection));
+  setElementHtml(field("notices"), noticesHtml(connection, id));
 
   const activeQueued = actions.filter(item => item.done !== true && item.current !== true).length;
   setElementText(field("queued-count"), activeQueued ? `+${activeQueued} queued` : "");
@@ -387,6 +389,11 @@ async function handleCardAction(event) {
     const card = button.closest(".character-card");
     if (!card) return;
 
+    if (button.dataset.cardAction === "reconnect"
+        || button.dataset.cardAction === "extend-yield") {
+      await runConnectionAction(card, button.dataset.cardAction);
+      return;
+    }
     if (button.dataset.cardAction === "clear-recent-alerts") {
       await clearRecentAlerts(card);
       return;
@@ -410,6 +417,38 @@ async function handleCardAction(event) {
   const card = summary?.closest(".character-card");
   if (!card || !isMobileViewport()) return;
   toggleCardDetails(card);
+}
+
+async function runConnectionAction(card, action) {
+  const characterIdValue = card.dataset.characterId;
+  if (!characterIdValue || state.connectionActions.has(characterIdValue)) return;
+
+  const snapshot = (state.dashboard?.characters || []).find((candidate, index) =>
+    characterId(candidate, index) === characterIdValue);
+  const wasYielded = snapshot?.connection?.status === "yielded";
+  const actionDescription = action === "extend-yield"
+    ? "extend yield"
+    : wasYielded ? "resume connection" : "reconnect";
+  const endpoint = action === "extend-yield"
+    ? `/api/admin/connections/${encodeURIComponent(characterIdValue)}/yield/extend`
+    : `/api/admin/connections/${encodeURIComponent(characterIdValue)}/reconnect`;
+
+  state.connectionActions.set(characterIdValue, action);
+  state.connectionActionErrors.delete(characterIdValue);
+  if (state.dashboard) render(state.dashboard);
+
+  try {
+    await postDashboardAction(endpoint);
+    await refresh();
+  } catch (error) {
+    state.connectionActionErrors.set(
+      characterIdValue,
+      `Unable to ${actionDescription}: ${error.message}`,
+    );
+  } finally {
+    state.connectionActions.delete(characterIdValue);
+    if (state.dashboard) render(state.dashboard);
+  }
 }
 
 function handleCardSummaryKeydown(event) {
@@ -670,29 +709,32 @@ async function clearRecentAlerts(card) {
   }
 
   try {
-    const csrf = await dashboardCsrf();
-    const response = await fetch(
+    await postDashboardAction(
       `/api/admin/connections/${encodeURIComponent(characterId)}/recent-alerts/clear`,
-      {
-        method: "POST",
-        cache: "no-store",
-        headers: { [csrf.headerName]: csrf.token },
-      },
     );
-    if (!response.ok) {
-      let message = `HTTP ${response.status}`;
-      try {
-        const payload = await response.json();
-        message = payload.message || payload.detail || payload.error || message;
-      } catch {}
-      throw new Error(message);
-    }
     await refresh();
   } catch (error) {
     window.alert(`Unable to clear recent alerts: ${error.message}`);
   } finally {
     state.clearingAlerts.delete(characterId);
     if (state.dashboard) render(state.dashboard);
+  }
+}
+
+async function postDashboardAction(url) {
+  const csrf = await dashboardCsrf();
+  const response = await fetch(url, {
+    method: "POST",
+    cache: "no-store",
+    headers: { [csrf.headerName]: csrf.token },
+  });
+  if (!response.ok) {
+    let message = `HTTP ${response.status}`;
+    try {
+      const payload = await response.json();
+      message = payload.message || payload.detail || payload.error || message;
+    } catch {}
+    throw new Error(message);
   }
 }
 
@@ -1208,8 +1250,11 @@ function characterStatus(connection, dataStatus) {
   };
 }
 
-function noticesHtml(connection) {
+function noticesHtml(connection, characterIdValue) {
   const notices = [];
+  const action = state.connectionActions.get(characterIdValue);
+  const actionError = state.connectionActionErrors.get(characterIdValue);
+  const disabled = action ? " disabled" : "";
   if (connection.error) {
     notices.push(`<p class="notice error">${escapeHtml(connection.error)}</p>`);
   }
@@ -1218,11 +1263,48 @@ function noticesHtml(connection) {
       ? `Resume ${formatResume(connection.resumeAt)}`
       : "Manual resume required";
     notices.push(`
-      <p class="notice warning">
-        Game opened elsewhere · ${escapeHtml(resume)}
+      <div class="notice warning connection-control">
+        <span class="connection-control-copy">${escapeHtml(resume)}</span>
+        <span class="connection-control-actions">
+          <button class="button-secondary" type="button" data-card-action="reconnect"
+              aria-label="Resume Character ${escapeHtml(characterIdValue)} now"
+              ${action === "reconnect" ? 'aria-busy="true"' : ""}${disabled}>
+            ${action === "reconnect" ? "Resuming…" : "Resume now"}
+          </button>
+          <button class="button-secondary" type="button" data-card-action="extend-yield"
+              aria-label="Extend yield for Character ${escapeHtml(characterIdValue)}"
+              ${action === "extend-yield" ? 'aria-busy="true"' : ""}${disabled}>
+            ${action === "extend-yield" ? "Extending…" : "Extend yield"}
+          </button>
+        </span>
+      </div>`);
+  } else if (shouldOfferReconnect(connection)) {
+    notices.push(`
+      <div class="connection-control connection-control-offline">
+        <span class="connection-control-actions">
+          <button class="button-secondary" type="button" data-card-action="reconnect"
+              aria-label="Reconnect Character ${escapeHtml(characterIdValue)}"
+              ${action === "reconnect" ? 'aria-busy="true"' : ""}${disabled}>
+            ${action === "reconnect" ? "Reconnecting…" : "Reconnect"}
+          </button>
+        </span>
+      </div>`);
+  }
+  if (actionError && (connection.status === "yielded" || shouldOfferReconnect(connection))) {
+    notices.push(`
+      <p class="notice error connection-action-error" role="alert">
+        ${escapeHtml(actionError)}
       </p>`);
   }
   return notices.join("");
+}
+
+function shouldOfferReconnect(connection) {
+  const status = String(connection?.status || "idle");
+  return !connection?.connected
+    && status !== "connected"
+    && status !== "connecting"
+    && status !== "yielded";
 }
 
 function isBattleAction(action) {
