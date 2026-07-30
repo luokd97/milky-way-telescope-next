@@ -11,7 +11,7 @@ const state = {
 };
 
 const grid = document.getElementById("character-grid");
-const ITEM_SPRITE_PATH = "/assets/mwi/items.svg";
+const ITEM_SPRITE_PATH = "/assets/mwi/items.svg?v=a9722df060a4";
 const BATTLE_ACTION_PREFIX = "/actions/combat/";
 const DRINK_WARNING_THRESHOLD = 288;
 const FOOD_WARNING_THRESHOLD = 1440;

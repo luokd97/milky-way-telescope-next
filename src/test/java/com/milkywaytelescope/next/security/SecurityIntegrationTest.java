@@ -67,6 +67,19 @@ class SecurityIntegrationTest {
     }
 
     @Test
+    void cachesVersionedStaticAssetsInTheBrowser() throws Exception {
+        mockMvc.perform(get("/assets/mwi/items.svg?v=a9722df060a4")
+                        .with(user("owner").roles("OWNER")))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", Matchers.allOf(
+                        Matchers.containsString("max-age=31536000"),
+                        Matchers.containsString("private"),
+                        Matchers.containsString("immutable"),
+                        Matchers.not(Matchers.containsString("no-store"))
+                )));
+    }
+
+    @Test
     void remembersSuccessfulLoginForThirtyDays() throws Exception {
         var login = mockMvc.perform(post("/login")
                         .param("username", "owner")
