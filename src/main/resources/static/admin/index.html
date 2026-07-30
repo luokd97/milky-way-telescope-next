@@ -10,8 +10,7 @@
 <body>
 <header class="site-header settings-header">
     <div class="site-header-copy">
-        <h1><a class="site-header-brand" href="/" aria-label="Telescope Next dashboard">Telescope Next</a></h1>
-        <span class="header-page-label">Settings</span>
+        <h1>Settings</h1>
     </div>
     <nav>
         <a class="header-action" href="/" aria-label="Dashboard" title="Dashboard">
@@ -34,13 +33,11 @@
     </section>
 
     <section class="panel config-panel" aria-labelledby="config-heading">
-        <h2 id="config-heading">Application JSON</h2>
-        <p id="config-help" class="muted settings-description">Contains plain-text access tokens.</p>
+        <h2 id="config-heading">Configuration JSON</h2>
         <form id="config-form">
             <div class="config-editor is-locked">
                 <textarea id="config-json" rows="30" spellcheck="false" required readonly
-                    aria-label="Application configuration JSON"
-                    aria-describedby="config-help"
+                    aria-label="Configuration JSON"
                     placeholder="Loading application configuration…"></textarea>
                 <button id="unlock-config" class="config-editor-lock" type="button"
                     aria-controls="config-json">Tap to edit JSON</button>

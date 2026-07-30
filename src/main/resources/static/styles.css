@@ -106,20 +106,6 @@ button:disabled {
 .header-icon { width: 21px; height: 21px; }
 .site-header-copy { display: flex; align-items: center; flex: 1; gap: 12px; min-width: 0; }
 .site-header-copy h1 { flex: 0 0 auto; font-size: 19px; white-space: nowrap; }
-.header-page-label {
-    display: inline-flex;
-    align-items: center;
-    min-width: 0;
-    color: var(--muted);
-    font-size: 12px;
-    font-weight: 750;
-    letter-spacing: .04em;
-}
-.header-page-label::before {
-    content: "·";
-    margin-right: 8px;
-    color: #627c92;
-}
 .header-summary {
     flex: 1;
     display: flex;
@@ -144,27 +130,10 @@ button:disabled {
 .header-summary-mobile {
     display: flex;
     align-items: center;
-    gap: 6px;
     min-width: 0;
     overflow: hidden;
 }
 .header-summary-mobile-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mobile-alert-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex: 0 0 auto;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border: 1px solid rgba(255, 140, 155, .45);
-    border-radius: 999px;
-    background: rgba(255, 140, 155, .12);
-    color: var(--red);
-    font-size: 10px;
-    font-weight: 850;
-    line-height: 1;
-}
 .header-summary-warning { color: var(--amber); }
 .header-summary-alert { color: var(--red); font-weight: 750; }
 .header-refresh.refresh-error { color: var(--red); }
@@ -235,7 +204,8 @@ button:disabled {
 
 .character-card-intro { min-width: 0; }
 .character-identity { min-width: 0; flex: 1; }
-.character-name-line { display: flex; align-items: center; gap: 8px; }
+.character-name-line { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.character-summary { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .character-name-line h2 { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .character-reference { flex-shrink: 0; color: var(--muted); font-size: 11px; font-weight: 750; white-space: nowrap; }
 .mode-badge { padding: 2px 6px; border-radius: 5px; background: #213c51; color: #c8e8ff; font-size: 11px; font-weight: 800; }
@@ -361,12 +331,11 @@ th { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spa
     outline: 2px solid rgba(255, 140, 155, .72);
     outline-offset: 3px;
 }
-.event-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 8px; border: 1px solid #5d4b25; border-radius: 9px; background: rgba(74, 58, 27, .35); }
+.event-row { display: flex; align-items: center; gap: 12px; padding: 7px 8px; border: 1px solid #5d4b25; border-radius: 9px; background: rgba(74, 58, 27, .35); }
 .event-item { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .event-item > span { display: grid; min-width: 0; }
 .event-item strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .event-item small { color: var(--amber); font-size: 10px; text-transform: uppercase; }
-.event-value { color: #ffe39b; font-weight: 850; }
 
 .diagnostics-dialog {
     width: min(1100px, calc(100vw - 32px));
@@ -604,8 +573,18 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
 
     .character-grid { gap: 12px; }
 
-    .character-card [data-dashboard-section]:not([data-dashboard-section="currentActivity"]) {
+    .character-card[data-details-expanded="false"] [data-dashboard-section] {
         display: none;
+    }
+    .character-card[data-details-expanded="false"]
+        [data-dashboard-section="currentActivity"] {
+        display: block;
+        order: 1;
+    }
+    .character-card[data-details-expanded="false"][data-has-recent-alerts="true"]
+        [data-dashboard-section="recentAlerts"] {
+        display: block;
+        order: 2;
     }
 
     [data-card-summary] { cursor: pointer; touch-action: manipulation; }
@@ -614,11 +593,6 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
         outline-offset: 4px;
         border-radius: 8px;
     }
-    .character-card[data-details-expanded="true"]
-        [data-dashboard-section]:not([data-dashboard-section="currentActivity"]) {
-        display: block;
-    }
-
     .card-sections { gap: 10px; margin-top: 10px; }
     .character-card .card-subpanel { padding: 11px; }
     .character-card .section-heading { margin-bottom: 8px; }

@@ -100,17 +100,12 @@ function renderHeaderSummary(dashboard, refreshFailed = false) {
   const characters = dashboard?.characters || [];
   let mobileStatus = "Waiting";
   let mobileStatusClass = "";
-  let recentAlerts = 0;
 
   if (dashboard) {
     const total = characters.length;
     const online = characters.filter(item =>
       item.connection?.connected && item.dataStatus === "live").length;
     const yielded = characters.filter(item => item.connection?.status === "yielded").length;
-    recentAlerts = characters.reduce(
-      (sum, item) => sum + (item.recentEvents?.length || 0),
-      0,
-    );
 
     items.push({
       text: total ? `${total} character${total === 1 ? "" : "s"}` : "No characters configured",
@@ -141,12 +136,6 @@ function renderHeaderSummary(dashboard, refreshFailed = false) {
       mobileStatus = `${online}/${total} online`;
       mobileStatusClass = yielded ? "header-summary-warning" : "";
     }
-    if (recentAlerts) {
-      items.push({
-        text: `${recentAlerts} recent alert${recentAlerts === 1 ? "" : "s"}`,
-        className: "header-summary-alert",
-      });
-    }
   }
 
   if (refreshFailed) {
@@ -175,11 +164,6 @@ function renderHeaderSummary(dashboard, refreshFailed = false) {
         <span class="header-summary-mobile-text${mobileStatusClass ? ` ${mobileStatusClass}` : ""}">
           ${escapeHtml(mobileStatus)}
         </span>
-        ${recentAlerts ? `
-          <span class="mobile-alert-count"
-              aria-label="${recentAlerts} recent alert${recentAlerts === 1 ? "" : "s"}">
-            ${recentAlerts}
-          </span>` : ""}
       </span>`,
   );
 }
@@ -234,19 +218,20 @@ function createCharacterCard() {
   card.innerHTML = `
     <div class="character-card-intro">
       <header class="character-card-header">
-        <div class="character-identity" data-card-summary="true"
-            role="button" tabindex="0" aria-expanded="false">
+        <div class="character-identity">
           <div class="character-name-line">
-            <h2 data-field="character-name"></h2>
-            <span class="character-reference">
-              <span data-field="character-id"></span>
-            </span>
-            <span class="mode-badge" data-field="character-mode" hidden></span>
+            <div class="character-summary" data-card-summary="true">
+              <h2 data-field="character-name"></h2>
+              <span class="character-reference">
+                <span data-field="character-id"></span>
+              </span>
+              <span class="mode-badge" data-field="character-mode" hidden></span>
+            </div>
+            <button class="character-alert-count" type="button"
+                data-field="character-alert-count" data-card-action="show-recent-alerts"
+                aria-label="View recent alerts" hidden></button>
           </div>
         </div>
-        <button class="character-alert-count" type="button"
-            data-field="character-alert-count" data-card-action="show-recent-alerts"
-            aria-label="View recent alerts" hidden></button>
         <div class="status-stack">
           <span class="status" data-field="character-status"></span>
         </div>
@@ -255,7 +240,8 @@ function createCharacterCard() {
     </div>
 
     <div class="card-sections">
-      <section class="card-subpanel activity-panel" data-dashboard-section="currentActivity">
+      <section class="card-subpanel activity-panel" data-dashboard-section="currentActivity"
+          data-card-summary="true">
         <div class="section-heading">
           <span>Current activity</span>
           <span class="section-meta" data-field="queued-count"></span>
@@ -442,15 +428,14 @@ function toggleCardDetails(card) {
 
 function setCardDetailsExpanded(card, expanded) {
   card.dataset.detailsExpanded = String(expanded);
-  const summary = card.querySelector("[data-card-summary]");
-  if (!summary) return;
-
   const name = card.querySelector("[data-field='character-name']")?.textContent || "character";
-  summary.setAttribute("aria-expanded", String(expanded));
-  summary.setAttribute(
-    "aria-label",
-    expanded ? `Collapse ${name} details` : `Show more ${name} details`,
-  );
+  card.querySelectorAll("[data-card-summary]").forEach(summary => {
+    summary.setAttribute("aria-expanded", String(expanded));
+    summary.setAttribute(
+      "aria-label",
+      expanded ? `Collapse ${name} details` : `Show more ${name} details`,
+    );
+  });
 }
 
 function showRecentAlerts(card) {
@@ -470,16 +455,25 @@ function showRecentAlerts(card) {
 }
 
 function updateCardSummaryState(card, detailsId, characterName) {
-  const summary = card.querySelector("[data-card-summary]");
-  if (!summary) return;
   const expanded = card.dataset.detailsExpanded === "true";
-  summary.tabIndex = isMobileViewport() ? 0 : -1;
-  summary.setAttribute("aria-controls", detailsId);
-  summary.setAttribute("aria-expanded", String(expanded));
-  summary.setAttribute(
-    "aria-label",
-    expanded ? `Collapse ${characterName} details` : `Show more ${characterName} details`,
-  );
+  const mobile = isMobileViewport();
+  card.querySelectorAll("[data-card-summary]").forEach(summary => {
+    summary.tabIndex = mobile ? 0 : -1;
+    if (mobile) {
+      summary.setAttribute("role", "button");
+      summary.setAttribute("aria-controls", detailsId);
+      summary.setAttribute("aria-expanded", String(expanded));
+      summary.setAttribute(
+        "aria-label",
+        expanded ? `Collapse ${characterName} details` : `Show more ${characterName} details`,
+      );
+    } else {
+      summary.removeAttribute("role");
+      summary.removeAttribute("aria-controls");
+      summary.removeAttribute("aria-expanded");
+      summary.removeAttribute("aria-label");
+    }
+  });
 }
 
 function isMobileViewport() {
@@ -632,6 +626,7 @@ function updateEvents(card, events) {
     `${events.length} alert${events.length === 1 ? "" : "s"}`,
   );
   const hasEvents = events.length > 0;
+  card.dataset.hasRecentAlerts = String(hasEvents);
   const clearing = state.clearingAlerts.has(card.dataset.characterId);
   setElementText(alertCountButton, events.length);
   setHidden(alertCountButton, !hasEvents);
@@ -1100,11 +1095,7 @@ function createEventRow() {
   hint.textContent = "Low inventory";
   copy.append(label, hint);
   item.append(icon, copy);
-
-  const value = document.createElement("span");
-  value.className = "event-value";
-  value.dataset.role = "count";
-  row.append(item, value);
+  row.append(item);
   return row;
 }
 
@@ -1112,7 +1103,6 @@ function updateEventRow(row, event) {
   const label = event.label || event.itemHrid || "Low item";
   updateIconAnchor(row.querySelector("[data-role='icon']"), event.itemHrid, "·");
   setElementText(row.querySelector("[data-role='label']"), label);
-  setElementText(row.querySelector("[data-role='count']"), formatItemCount(event.count));
 }
 
 function updateIconAnchor(anchor, itemHrid, fallbackText) {
