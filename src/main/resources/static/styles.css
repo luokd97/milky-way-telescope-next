@@ -176,22 +176,12 @@ button:disabled {
 .session-footer {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 24px;
+    justify-content: flex-end;
     width: min(1480px, calc(100% - 40px));
     margin: -32px auto 40px;
     padding-top: 18px;
     border-top: 1px solid var(--border-soft);
-    color: var(--muted);
-    font-size: 13px;
 }
-
-.session-footer > div {
-    display: grid;
-    gap: 2px;
-}
-
-.session-footer strong { color: var(--text); font-size: 14px; }
 
 .session-signout {
     flex-shrink: 0;
@@ -505,18 +495,10 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
     align-items: start;
 }
 .settings-description { max-width: 760px; margin-top: 8px; }
-.settings-scope {
-    padding: 4px 8px;
-    border: 1px solid var(--border);
-    border-radius: 999px;
-    color: var(--muted);
-    font-size: 11px;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: .04em;
-}
 
+.config-editor { position: relative; margin-top: 14px; }
 .config-panel textarea {
+    display: block;
     min-height: 480px;
     resize: vertical;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
@@ -524,6 +506,7 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
     line-height: 1.55;
     tab-size: 2;
 }
+.config-editor-lock { display: none; }
 .config-panel .button-row { margin-top: 14px; }
 
 .admin-layout { display: grid; grid-template-columns: minmax(320px, .8fr) minmax(480px, 1.2fr); gap: 20px; }
@@ -531,9 +514,48 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
 .panel-heading { justify-content: space-between; }
 label:not(.diagnostic-character-field) { display: grid; gap: 6px; margin: 16px 0; }
 input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9px; background: #091522; color: var(--text); padding: 11px; }
-.connection-list { display: grid; gap: 12px; }
+.connection-list { display: grid; gap: 0; }
 .runtime-panel .connection-list { margin-top: 14px; }
-.connection-row { display: grid; gap: 14px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--panel-strong); }
+.connection-row { display: grid; gap: 6px; padding: 11px 0; }
+.connection-row + .connection-row { border-top: 1px solid var(--border-soft); }
+.connection-summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+.connection-title { min-width: 0; flex-wrap: wrap; gap: 8px; }
+.connection-row .status {
+    gap: 6px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+}
+.connection-row .status::before {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: currentColor;
+    content: "";
+}
+.connection-actions { flex: 0 0 auto; gap: 8px; }
+.connection-actions button {
+    min-height: 34px;
+    padding: 6px 8px;
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--accent);
+    font-size: 13px;
+}
+.connection-actions .button-danger { color: var(--red); }
+.connection-actions button:hover,
+.connection-actions button:focus-visible {
+    border-color: var(--border);
+    background: var(--panel-strong);
+}
+.connection-row > .notice {
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: var(--muted);
+}
+.connection-row > .notice.error { color: #ffd2da; }
 .connection-row code { display: block; overflow-wrap: anywhere; color: var(--muted); margin-top: 8px; }
 .login-page { display: grid; place-items: center; padding: 16px; }
 .login-card {
@@ -609,10 +631,8 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .slot-group[data-slot-group="drinks"] .slot-group-label { display: none; }
     .page-shell { width: min(100% - 20px, 1480px); margin-top: 12px; margin-bottom: 40px; }
     .session-footer {
-        align-items: flex-start;
+        justify-content: flex-end;
         width: min(100% - 20px, 1480px);
-        flex-direction: column;
-        gap: 10px;
         margin-bottom: 28px;
     }
     .character-card { padding: 12px; border-radius: 14px; }
@@ -645,12 +665,41 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .settings-page .panel { padding: 15px; border-radius: 14px; }
     .settings-description { margin-top: 6px; }
     .config-panel textarea { min-height: 360px; }
+    .config-editor.is-locked .config-editor-lock {
+        position: absolute;
+        z-index: 1;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+        background: rgba(9, 21, 34, .58);
+        color: var(--text);
+        touch-action: pan-y;
+    }
     .admin-layout { gap: 12px; }
-    .connection-list { gap: 8px; }
-    .connection-row { gap: 10px; padding: 11px; }
+    .connection-row { padding: 10px 0; }
+    .connection-summary { align-items: center; gap: 6px; }
+    .connection-title { flex: 1 1 auto; flex-wrap: nowrap; gap: 6px; }
+    .connection-character-label { display: none; }
+    .connection-row .status { flex: 0 0 auto; font-size: 10px; white-space: nowrap; }
+    .connection-actions { justify-content: flex-end; gap: 2px; margin-left: auto; }
+    .connection-actions button {
+        min-height: 32px;
+        padding: 4px;
+        font-size: 12px;
+        white-space: nowrap;
+    }
+    .connection-row > .notice { display: none; }
     .settings-page label:not(.diagnostic-character-field) { gap: 5px; margin: 12px 0; }
     .settings-page input,
     .settings-page textarea { padding: 9px; }
     .settings-page .button-row { gap: 8px; }
+    .config-panel .button-row > button {
+        flex: 1 1 0;
+        min-width: 0;
+        padding-inline: 8px;
+    }
     .panel-heading { align-items: flex-start; flex-direction: column; }
 }

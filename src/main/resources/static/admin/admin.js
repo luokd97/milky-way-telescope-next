@@ -1,12 +1,14 @@
 let csrf;
 let connections = [];
 let currentConfigText = "";
+let configActionsBusy = true;
+const configEditorMedia = window.matchMedia("(max-width: 540px)");
 
 document.addEventListener("DOMContentLoaded", async () => {
+  initializeConfigEditor();
   document.getElementById("config-form").addEventListener("submit", saveConfig);
-  document.getElementById("format-config").addEventListener("click", formatConfig);
-  document.getElementById("load-config").addEventListener("click", loadConfig);
-  document.getElementById("reset-config").addEventListener("click", resetConfig);
+  document.getElementById("config-json").addEventListener("input", updateConfigActions);
+  document.getElementById("discard-config").addEventListener("click", discardConfig);
   document.getElementById("connection-list").addEventListener("click", handleRuntimeAction);
   try {
     csrf = await fetchJson("/api/security/csrf");
@@ -34,26 +36,56 @@ function attachCsrfToLogout() {
   form.appendChild(input);
 }
 
-async function loadConfig() {
-  const config = await fetchJson("/api/admin/config");
-  currentConfigText = JSON.stringify(config, null, 2);
-  document.getElementById("config-json").value = currentConfigText;
-  showConfigMessage("Configuration loaded.", false);
+function initializeConfigEditor() {
+  document.getElementById("unlock-config").addEventListener("click", () => {
+    setConfigEditorLocked(false);
+    document.getElementById("config-json").focus();
+  });
+  document.getElementById("config-json").addEventListener("blur", () => {
+    if (configEditorMedia.matches) setConfigEditorLocked(true);
+  });
+  configEditorMedia.addEventListener("change", syncConfigEditorMode);
+  syncConfigEditorMode();
 }
 
-function formatConfig() {
+function syncConfigEditorMode() {
+  setConfigEditorLocked(configEditorMedia.matches);
+}
+
+function setConfigEditorLocked(locked) {
+  document.querySelector(".config-editor").classList.toggle("is-locked", locked);
+  document.getElementById("config-json").readOnly = locked;
+}
+
+async function loadConfig(message = null) {
+  setConfigActionsBusy(true);
   try {
-    const config = parseConfigText();
-    document.getElementById("config-json").value = JSON.stringify(config, null, 2);
-    showConfigMessage("JSON formatted. Save configuration to apply it.", false);
+    const config = await fetchJson("/api/admin/config");
+    currentConfigText = JSON.stringify(config, null, 2);
+    document.getElementById("config-json").value = currentConfigText;
+    if (message) showConfigMessage(message, false);
+  } finally {
+    setConfigActionsBusy(false);
+  }
+}
+
+async function discardConfig() {
+  try {
+    await loadConfig("Unsaved changes discarded.");
   } catch (error) {
     showConfigMessage(error.message, true);
   }
 }
 
-function resetConfig() {
-  document.getElementById("config-json").value = currentConfigText;
-  showConfigMessage("Unsaved changes were reset.", false);
+function updateConfigActions() {
+  const hasChanges = document.getElementById("config-json").value !== currentConfigText;
+  document.getElementById("save-config").disabled = configActionsBusy || !hasChanges;
+  document.getElementById("discard-config").disabled = configActionsBusy || !hasChanges;
+}
+
+function setConfigActionsBusy(busy) {
+  configActionsBusy = busy;
+  updateConfigActions();
 }
 
 async function saveConfig(event) {
@@ -66,6 +98,7 @@ async function saveConfig(event) {
     return;
   }
 
+  setConfigActionsBusy(true);
   try {
     const saved = await mutate("/api/admin/config", "PUT", config);
     currentConfigText = JSON.stringify(saved, null, 2);
@@ -74,6 +107,8 @@ async function saveConfig(event) {
     await refreshConnections();
   } catch (error) {
     showConfigMessage(error.message, true);
+  } finally {
+    setConfigActionsBusy(false);
   }
 }
 
@@ -101,34 +136,34 @@ function connectionRow(connection) {
   const canDisconnect = connection.status === "connected" || connection.status === "connecting";
   return `
     <article class="connection-row">
-      <div>
+      <div class="connection-summary">
         <div class="connection-title">
-          <strong>Character ${escapeHtml(connection.characterId)}</strong>
+          <strong><span class="connection-character-label">Character </span>${escapeHtml(connection.characterId)}</strong>
           <span class="status ${statusClass(connection.status)}">
             ${escapeHtml(connection.status)}
           </span>
         </div>
-        ${connection.error ? `<p class="notice error">${escapeHtml(connection.error)}</p>` : ""}
-        ${connection.status === "yielded" ? `
-          <p class="notice">
-            Game opened elsewhere · ${connection.resumeAt
-              ? `Resume ${escapeHtml(formatResume(connection.resumeAt))}`
-              : "Manual resume required"}
-          </p>` : ""}
+        <div class="button-row connection-actions">
+          ${canDisconnect ? `
+            <button class="button-danger" data-action="disconnect" data-id="${escapeHtml(connection.characterId)}">
+              Disconnect
+            </button>` : `
+            <button class="button-secondary" data-action="reconnect" data-id="${escapeHtml(connection.characterId)}">
+              ${connection.status === "yielded" ? "Resume now" : "Reconnect"}
+            </button>`}
+          ${connection.status === "yielded" ? `
+            <button class="button-secondary" data-action="extend-yield" data-id="${escapeHtml(connection.characterId)}">
+              Extend yield
+            </button>` : ""}
+        </div>
       </div>
-      <div class="button-row">
-        ${canDisconnect ? `
-          <button class="button-danger" data-action="disconnect" data-id="${escapeHtml(connection.characterId)}">
-            Disconnect
-          </button>` : `
-          <button class="button-secondary" data-action="reconnect" data-id="${escapeHtml(connection.characterId)}">
-            ${connection.status === "yielded" ? "Resume now" : "Reconnect"}
-          </button>`}
-        ${connection.status === "yielded" ? `
-          <button class="button-secondary" data-action="extend-yield" data-id="${escapeHtml(connection.characterId)}">
-            Extend yield
-          </button>` : ""}
-      </div>
+      ${connection.error ? `<p class="notice error">${escapeHtml(connection.error)}</p>` : ""}
+      ${connection.status === "yielded" ? `
+        <p class="notice">
+          Game opened elsewhere · ${connection.resumeAt
+            ? `Resume ${escapeHtml(formatResume(connection.resumeAt))}`
+            : "Manual resume required"}
+        </p>` : ""}
     </article>`;
 }
 
@@ -151,7 +186,7 @@ async function handleRuntimeAction(event) {
       await mutate(`/api/admin/connections/${encodeURIComponent(id)}/yield/extend`, "POST");
     }
     await refreshConnections();
-    showRuntimeMessage("Runtime action accepted.", false);
+    hideRuntimeMessage();
   } catch (error) {
     showRuntimeMessage(error.message, true);
   }
@@ -212,6 +247,13 @@ function showRuntimeMessage(message, error) {
   root.textContent = message;
   root.className = `notice${error ? " error" : ""}`;
   root.hidden = false;
+}
+
+function hideRuntimeMessage() {
+  const root = document.getElementById("runtime-message");
+  root.textContent = "";
+  root.className = "notice";
+  root.hidden = true;
 }
 
 function escapeHtml(value) {

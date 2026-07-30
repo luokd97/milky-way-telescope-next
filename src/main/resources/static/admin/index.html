@@ -27,49 +27,33 @@
 <main class="page-shell settings-layout settings-page">
     <section class="panel runtime-panel" aria-labelledby="connection-status-heading">
         <div class="panel-heading">
-            <h2 id="connection-status-heading">Connection Status (<span id="connection-count">0</span>)</h2>
+            <h2 id="connection-status-heading">Connections (<span id="connection-count">0</span>)</h2>
         </div>
         <p id="runtime-message" class="notice" hidden></p>
         <div id="connection-list" class="connection-list"></div>
     </section>
 
     <section class="panel config-panel" aria-labelledby="config-heading">
-        <div class="panel-heading">
-            <div>
-                <p class="eyebrow">Unified configuration</p>
-                <h2 id="config-heading">Application JSON</h2>
-            </div>
-            <span class="settings-scope">Schema version 2</span>
-        </div>
-        <p class="muted settings-description">
-            This file controls Dashboard settings, message filters, connections, credentials, and persisted connection control state.
-            Changes are validated and applied atomically.
-        </p>
+        <h2 id="config-heading">Application JSON</h2>
+        <p id="config-help" class="muted settings-description">Contains plain-text access tokens.</p>
         <form id="config-form">
-            <label for="config-json">
-                <span>Configuration JSON</span>
-                <textarea id="config-json" rows="30" spellcheck="false" required
+            <div class="config-editor is-locked">
+                <textarea id="config-json" rows="30" spellcheck="false" required readonly
+                    aria-label="Application configuration JSON"
                     aria-describedby="config-help"
                     placeholder="Loading application configuration…"></textarea>
-            </label>
-            <p id="config-help" class="muted settings-description">
-                Connection access tokens are shown here in plain text because this page is protected by the site login. Keep the file private.
-            </p>
+                <button id="unlock-config" class="config-editor-lock" type="button"
+                    aria-controls="config-json">Tap to edit JSON</button>
+            </div>
             <p id="config-message" class="notice" hidden></p>
             <div class="button-row">
-                <button id="save-config" type="submit">Save configuration</button>
-                <button id="format-config" class="button-secondary" type="button">Format JSON</button>
-                <button id="load-config" class="button-secondary" type="button">Load current</button>
-                <button id="reset-config" class="button-secondary" type="button">Reset</button>
+                <button id="save-config" type="submit" disabled>Save</button>
+                <button id="discard-config" class="button-secondary" type="button" disabled>Discard</button>
             </div>
         </form>
     </section>
 </main>
 <footer class="session-footer">
-    <div>
-        <strong>Session</strong>
-        <span>End access to this administration session on this browser.</span>
-    </div>
     <form method="post" action="/logout" id="logout-form">
         <button class="session-signout" type="submit">Sign out</button>
     </form>
