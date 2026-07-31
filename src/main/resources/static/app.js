@@ -244,13 +244,12 @@ function createCharacterCard() {
     <div class="card-sections">
       <section class="card-subpanel activity-panel" data-dashboard-section="currentActivity"
           data-card-summary="true">
-        <div class="section-heading">
-          <span>Current activity</span>
+        <div class="section-heading activity-heading">
+          <span class="activity-heading-main">
+            <span class="activity-heading-label" data-field="action-label"></span>
+            <span class="count-chip" data-field="action-count" hidden></span>
+          </span>
           <span class="section-meta" data-field="queued-count"></span>
-        </div>
-        <div class="activity-line">
-          <strong data-field="action-label"></strong>
-          <span class="count-chip" data-field="action-count" hidden></span>
         </div>
         <div class="task-line">
           <span data-field="task-count"></span>

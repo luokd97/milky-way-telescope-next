@@ -270,8 +270,9 @@ button:disabled {
 .section-toggle:hover { color: var(--accent-strong); }
 .section-toggle[hidden] { display: none; }
 
-.activity-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
-.activity-line > strong { font-size: 21px; line-height: 1.2; overflow-wrap: anywhere; }
+.activity-heading { align-items: baseline; }
+.activity-heading-main { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; min-width: 0; }
+.activity-heading-label { color: var(--text); font-size: 21px; line-height: 1.2; letter-spacing: normal; text-transform: none; overflow-wrap: anywhere; }
 .count-chip { padding: 2px 7px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel-strong); color: #cfe1ee; font-size: 12px; font-weight: 750; }
 .task-line { display: flex; flex-wrap: wrap; gap: 8px 16px; margin-top: 8px; color: var(--muted); font-size: 13px; font-weight: 700; }
 
@@ -642,7 +643,7 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .character-card-header { gap: 8px; }
     .card-sections { gap: 8px; margin-top: 8px; }
     .character-card .card-subpanel { padding: 10px; border-radius: 10px; }
-    .activity-line > strong { font-size: 19px; }
+    .activity-heading-label { font-size: 19px; }
     .task-line { gap: 6px 12px; margin-top: 6px; }
     .slot-groups { display: flex; gap: 4px; margin-top: 8px; }
     .slot-group { flex: 1 1 0; gap: 0; }
