@@ -494,6 +494,53 @@ select { min-height: 36px; max-width: min(360px, 65vw); border: 1px solid var(--
     align-items: start;
 }
 .settings-description { max-width: 760px; margin-top: 8px; }
+.watch-terms-heading { align-items: flex-start; }
+.watch-terms-heading-copy { display: grid; gap: 3px; min-width: 0; }
+.watch-terms-heading-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px; }
+.settings-status { color: var(--muted); font-size: 11px; font-weight: 800; }
+.settings-status.is-unsaved { color: var(--amber); }
+.watch-terms-list { display: grid; gap: 8px; margin-top: 14px; }
+.watch-term-row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 8px;
+    padding: 8px;
+    border: 1px solid var(--border-soft);
+    border-radius: 10px;
+    background: rgba(16, 33, 49, .78);
+}
+.watch-term-index {
+    display: grid;
+    place-items: center;
+    width: 25px;
+    height: 25px;
+    border-radius: 50%;
+    background: var(--panel-strong);
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
+}
+.watch-term-input { min-width: 0; margin: 0; }
+.watch-term-actions { display: flex; align-items: center; gap: 5px; }
+.watch-term-actions button {
+    min-height: 34px;
+    padding: 5px 8px;
+    border: 1px solid var(--border);
+    font-size: 12px;
+}
+.watch-term-move { width: 34px; padding-inline: 0 !important; font-size: 17px !important; line-height: 1; }
+.watch-term-remove { color: #ffdce2; }
+.watch-terms-empty {
+    margin-top: 14px;
+    padding: 12px;
+    border: 1px dashed var(--border);
+    border-radius: 9px;
+    background: rgba(9, 21, 34, .48);
+    font-size: 12px;
+}
+.watch-terms-add-row { margin-top: 10px; }
+.watch-terms-panel .button-row { margin-top: 14px; }
 
 .config-editor { position: relative; margin-top: 14px; }
 .config-panel textarea {
@@ -676,6 +723,13 @@ input, textarea { width: 100%; border: 1px solid var(--border); border-radius: 9
     .settings-layout { gap: 16px; }
     .settings-page .panel { padding: 15px; border-radius: 14px; }
     .settings-description { margin-top: 6px; }
+    .watch-term-row { grid-template-columns: auto minmax(0, 1fr); }
+    .watch-term-actions { grid-column: 2; justify-content: flex-end; }
+    .watch-terms-panel .button-row > button {
+        flex: 1 1 0;
+        min-width: 0;
+        padding-inline: 8px;
+    }
     .config-panel textarea { min-height: 360px; }
     .config-editor.is-locked .config-editor-lock {
         position: absolute;

@@ -2,10 +2,14 @@ let csrf;
 let connections = [];
 let currentConfigText = "";
 let configActionsBusy = true;
+let savedWatchTerms = [];
+let watchTermsDraft = [];
+let watchTermsActionsBusy = true;
 const configEditorMedia = window.matchMedia("(max-width: 540px)");
 
 document.addEventListener("DOMContentLoaded", async () => {
   initializeConfigEditor();
+  initializeWatchTermsEditor();
   document.getElementById("config-form").addEventListener("submit", saveConfig);
   document.getElementById("config-json").addEventListener("input", updateConfigActions);
   document.getElementById("discard-config").addEventListener("click", discardConfig);
@@ -57,15 +61,174 @@ function setConfigEditorLocked(locked) {
   document.getElementById("config-json").readOnly = locked;
 }
 
+function initializeWatchTermsEditor() {
+  document.getElementById("watch-terms-form").addEventListener("submit", saveWatchTerms);
+  document.getElementById("watch-terms-list").addEventListener("input", handleWatchTermInput);
+  document.getElementById("watch-terms-list").addEventListener("click", handleWatchTermAction);
+  document.getElementById("add-watch-term").addEventListener("click", addWatchTerm);
+  document.getElementById("discard-watch-terms").addEventListener("click", discardWatchTerms);
+  renderWatchTerms();
+}
+
+function handleWatchTermInput(event) {
+  const input = event.target.closest("input[data-watch-term-index]");
+  if (!input) return;
+  watchTermsDraft[Number(input.dataset.watchTermIndex)] = input.value;
+  updateWatchTermsActions();
+}
+
+function handleWatchTermAction(event) {
+  const button = event.target.closest("button[data-watch-term-action]");
+  if (!button || watchTermsActionsBusy) return;
+  const index = Number(button.dataset.watchTermIndex);
+  const action = button.dataset.watchTermAction;
+  if (!Number.isInteger(index) || index < 0 || index >= watchTermsDraft.length) return;
+
+  if (action === "remove") {
+    watchTermsDraft.splice(index, 1);
+  } else if (action === "move-up" && index > 0) {
+    [watchTermsDraft[index - 1], watchTermsDraft[index]] =
+      [watchTermsDraft[index], watchTermsDraft[index - 1]];
+  } else if (action === "move-down" && index < watchTermsDraft.length - 1) {
+    [watchTermsDraft[index], watchTermsDraft[index + 1]] =
+      [watchTermsDraft[index + 1], watchTermsDraft[index]];
+  } else {
+    return;
+  }
+
+  renderWatchTerms();
+  updateWatchTermsActions();
+  const nextIndex = action === "move-up" ? index - 1 : action === "move-down" ? index + 1 : index;
+  if (action !== "remove") {
+    const nextInput = document.querySelector(`input[data-watch-term-index="${nextIndex}"]`);
+    nextInput?.focus();
+  }
+}
+
+function addWatchTerm() {
+  if (watchTermsActionsBusy) return;
+  watchTermsDraft.push("");
+  renderWatchTerms();
+  updateWatchTermsActions();
+  const lastIndex = watchTermsDraft.length - 1;
+  const input = document.querySelector(`input[data-watch-term-index="${lastIndex}"]`);
+  input?.focus();
+}
+
+function discardWatchTerms() {
+  watchTermsDraft = [...savedWatchTerms];
+  renderWatchTerms();
+  updateWatchTermsActions();
+  showWatchTermsMessage("Unsaved watch term changes discarded.", false);
+}
+
+function renderWatchTerms() {
+  const list = document.getElementById("watch-terms-list");
+  const empty = document.getElementById("watch-terms-empty");
+  const count = document.getElementById("watch-terms-count");
+  if (!list || !empty || !count) return;
+
+  list.innerHTML = watchTermsDraft.map((term, index) => `
+    <div class="watch-term-row">
+      <span class="watch-term-index" aria-hidden="true">${index + 1}</span>
+      <input class="watch-term-input" type="text" value="${escapeHtml(term)}"
+          data-watch-term-index="${index}" aria-label="Watch term ${index + 1}">
+      <div class="watch-term-actions">
+        <button class="button-secondary watch-term-move" type="button"
+            data-watch-term-action="move-up" data-watch-term-index="${index}"
+            data-boundary-disabled="${index === 0}" aria-label="Move watch term ${index + 1} up"
+            title="Move up"${index === 0 ? " disabled" : ""}>↑</button>
+        <button class="button-secondary watch-term-move" type="button"
+            data-watch-term-action="move-down" data-watch-term-index="${index}"
+            data-boundary-disabled="${index === watchTermsDraft.length - 1}"
+            aria-label="Move watch term ${index + 1} down" title="Move down"${index === watchTermsDraft.length - 1 ? " disabled" : ""}>↓</button>
+        <button class="button-danger watch-term-remove" type="button"
+            data-watch-term-action="remove" data-watch-term-index="${index}"
+            aria-label="Remove watch term ${index + 1}" title="Remove">Remove</button>
+      </div>
+    </div>`).join("");
+  empty.hidden = watchTermsDraft.length > 0;
+  count.textContent = String(watchTermsDraft.length);
+  setWatchTermControlsDisabled(watchTermsActionsBusy);
+}
+
+function setWatchTermControlsDisabled(disabled) {
+  document.querySelectorAll("#watch-terms-list input, #watch-terms-list button")
+    .forEach(control => {
+      control.disabled = disabled || control.dataset.boundaryDisabled === "true";
+    });
+  document.getElementById("add-watch-term").disabled = disabled;
+}
+
+function syncWatchTermsFromConfig(config) {
+  const terms = Array.isArray(config?.dashboard?.inventoryWatchTerms)
+    ? config.dashboard.inventoryWatchTerms.map(term => String(term))
+    : [];
+  savedWatchTerms = [...terms];
+  watchTermsDraft = [...terms];
+  renderWatchTerms();
+  updateWatchTermsActions();
+}
+
+function normalizeWatchTerms(values) {
+  const normalized = [];
+  const seen = new Set();
+  for (const value of values) {
+    const term = String(value ?? "").trim();
+    if (!term || seen.has(term)) continue;
+    seen.add(term);
+    normalized.push(term);
+  }
+  return normalized;
+}
+
+function updateWatchTermsActions() {
+  const hasChanges = JSON.stringify(watchTermsDraft) !== JSON.stringify(savedWatchTerms);
+  const save = document.getElementById("save-watch-terms");
+  const discard = document.getElementById("discard-watch-terms");
+  const status = document.getElementById("watch-terms-status");
+  if (!save || !discard || !status) return;
+
+  save.disabled = watchTermsActionsBusy || !hasChanges;
+  discard.disabled = watchTermsActionsBusy || !hasChanges;
+  status.textContent = hasChanges ? "Unsaved changes" : "Saved";
+  status.classList.toggle("is-unsaved", hasChanges);
+}
+
+function setWatchTermsActionsBusy(busy) {
+  watchTermsActionsBusy = busy;
+  setWatchTermControlsDisabled(busy);
+  updateWatchTermsActions();
+}
+
+async function saveWatchTerms(event) {
+  event.preventDefault();
+  setWatchTermsActionsBusy(true);
+  try {
+    await mutate("/api/admin/settings/dashboard", "PUT", {
+      inventoryWatchTerms: normalizeWatchTerms(watchTermsDraft),
+    });
+    await loadConfig();
+    showWatchTermsMessage("Inventory watch terms saved and applied.", false);
+  } catch (error) {
+    showWatchTermsMessage(error.message, true);
+  } finally {
+    setWatchTermsActionsBusy(false);
+  }
+}
+
 async function loadConfig(message = null) {
   setConfigActionsBusy(true);
+  setWatchTermsActionsBusy(true);
   try {
     const config = await fetchJson("/api/admin/config");
     currentConfigText = JSON.stringify(config, null, 2);
     document.getElementById("config-json").value = currentConfigText;
+    syncWatchTermsFromConfig(config);
     if (message) showConfigMessage(message, false);
   } finally {
     setConfigActionsBusy(false);
+    setWatchTermsActionsBusy(false);
   }
 }
 
@@ -99,16 +262,19 @@ async function saveConfig(event) {
   }
 
   setConfigActionsBusy(true);
+  setWatchTermsActionsBusy(true);
   try {
     const saved = await mutate("/api/admin/config", "PUT", config);
     currentConfigText = JSON.stringify(saved, null, 2);
     document.getElementById("config-json").value = currentConfigText;
+    syncWatchTermsFromConfig(saved);
     showConfigMessage("Configuration saved and applied.", false);
     await refreshConnections();
   } catch (error) {
     showConfigMessage(error.message, true);
   } finally {
     setConfigActionsBusy(false);
+    setWatchTermsActionsBusy(false);
   }
 }
 
@@ -237,6 +403,13 @@ async function fetchJson(url) {
 
 function showConfigMessage(message, error) {
   const root = document.getElementById("config-message");
+  root.textContent = message;
+  root.className = `notice${error ? " error" : ""}`;
+  root.hidden = false;
+}
+
+function showWatchTermsMessage(message, error) {
+  const root = document.getElementById("watch-terms-message");
   root.textContent = message;
   root.className = `notice${error ? " error" : ""}`;
   root.hidden = false;

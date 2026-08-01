@@ -32,6 +32,36 @@
         <div id="connection-list" class="connection-list"></div>
     </section>
 
+    <section class="panel watch-terms-panel" aria-labelledby="watch-terms-heading">
+        <div class="panel-heading watch-terms-heading">
+            <div class="watch-terms-heading-copy">
+                <div class="watch-terms-heading-line">
+                    <h2 id="watch-terms-heading">Inventory watch terms</h2>
+                    <span id="watch-terms-count" class="count-chip">0</span>
+                </div>
+                <p id="watch-terms-status" class="settings-status">Saved</p>
+            </div>
+        </div>
+        <p class="muted settings-description">
+            Matching is case-insensitive and uses the item name, HRID, and location. Terms are matched as text fragments,
+            not regular expressions. Earlier terms have higher highlight priority.
+        </p>
+        <form id="watch-terms-form">
+            <div id="watch-terms-list" class="watch-terms-list"></div>
+            <p id="watch-terms-empty" class="watch-terms-empty muted" hidden>
+                No watch terms configured. Inventory highlights will use the default ordering.
+            </p>
+            <div class="watch-terms-add-row">
+                <button id="add-watch-term" class="button-secondary" type="button">Add term</button>
+            </div>
+            <p id="watch-terms-message" class="notice" hidden></p>
+            <div class="button-row">
+                <button id="save-watch-terms" type="submit" disabled>Save watch terms</button>
+                <button id="discard-watch-terms" class="button-secondary" type="button" disabled>Discard</button>
+            </div>
+        </form>
+    </section>
+
     <section class="panel config-panel" aria-labelledby="config-heading">
         <h2 id="config-heading">Configuration JSON</h2>
         <form id="config-form">
