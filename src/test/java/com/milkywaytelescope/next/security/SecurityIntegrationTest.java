@@ -14,6 +14,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.milkywaytelescope.next.TelescopeNextApplication;
+import com.milkywaytelescope.next.api.SecurityController.CsrfView;
 import com.milkywaytelescope.next.connection.ConnectionProfile;
 import com.milkywaytelescope.next.settings.ApplicationConfig;
 import com.milkywaytelescope.next.settings.ApplicationConfigStore;
@@ -28,6 +29,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -125,6 +127,58 @@ class SecurityIntegrationTest {
                         .with(user("owner").roles("OWNER"))
                         .with(csrf()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void csrfTokensAreBoundToTheirHttpSession() throws Exception {
+        String characterId = "77002";
+        ConnectionProfile profile = ConnectionProfile.from(
+                "wss://api.milkywayidle.com/ws?hash=placeholder&characterId=" + characterId,
+                "session-bound-csrf-token"
+        );
+        ApplicationConfig previous = configStore.current();
+        configStore.replace(previous.withConnections(List.of(profile)));
+        registry.getOrCreate(profile);
+
+        MockHttpSession firstSession = new MockHttpSession();
+        MockHttpSession secondSession = new MockHttpSession();
+        try {
+            CsrfView firstToken = objectMapper.readValue(
+                    mockMvc.perform(get("/api/security/csrf")
+                                    .with(user("owner").roles("OWNER"))
+                                    .session(firstSession))
+                            .andExpect(status().isOk())
+                            .andReturn()
+                            .getResponse()
+                            .getContentAsString(),
+                    CsrfView.class
+            );
+            CsrfView secondToken = objectMapper.readValue(
+                    mockMvc.perform(get("/api/security/csrf")
+                                    .with(user("owner").roles("OWNER"))
+                                    .session(secondSession))
+                            .andExpect(status().isOk())
+                            .andReturn()
+                            .getResponse()
+                            .getContentAsString(),
+                    CsrfView.class
+            );
+
+            mockMvc.perform(post("/api/admin/connections/" + characterId + "/recent-alerts/clear")
+                            .with(user("owner").roles("OWNER"))
+                            .session(secondSession)
+                            .header(firstToken.headerName(), firstToken.token()))
+                    .andExpect(status().isForbidden());
+
+            mockMvc.perform(post("/api/admin/connections/" + characterId + "/recent-alerts/clear")
+                            .with(user("owner").roles("OWNER"))
+                            .session(secondSession)
+                            .header(secondToken.headerName(), secondToken.token()))
+                    .andExpect(status().isNoContent());
+        } finally {
+            registry.remove(characterId);
+            configStore.replace(previous);
+        }
     }
 
     @Test

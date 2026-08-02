@@ -15,8 +15,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("discard-config").addEventListener("click", discardConfig);
   document.getElementById("connection-list").addEventListener("click", handleRuntimeAction);
   try {
-    csrf = await fetchJson("/api/security/csrf");
-    attachCsrfToLogout();
+    await loadCsrf();
     const results = await Promise.allSettled([loadConfig(), refreshConnections()]);
     if (results[0].status === "rejected") {
       showConfigMessage(results[0].reason.message, true);
@@ -33,11 +32,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 function attachCsrfToLogout() {
   const form = document.getElementById("logout-form");
-  const input = document.createElement("input");
+  if (!form || !csrf) return;
+  const input = form.querySelector("input[data-csrf-field]") || document.createElement("input");
   input.type = "hidden";
   input.name = csrf.parameterName;
   input.value = csrf.token;
-  form.appendChild(input);
+  input.dataset.csrfField = "true";
+  if (!input.parentElement) form.appendChild(input);
 }
 
 function initializeConfigEditor() {
@@ -375,15 +376,12 @@ function statusClass(status) {
 }
 
 async function mutate(url, method, body) {
-  const response = await fetch(url, {
-    method,
-    cache: "no-store",
-    headers: {
-      "Content-Type": "application/json",
-      [csrf.headerName]: csrf.token,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let response = await sendMutation(url, method, body);
+  if (response.status === 403) {
+    csrf = null;
+    await loadCsrf();
+    response = await sendMutation(url, method, body);
+  }
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
     try {
@@ -393,6 +391,26 @@ async function mutate(url, method, body) {
     throw new Error(message);
   }
   return response.status === 204 ? null : response.json().catch(() => null);
+}
+
+async function sendMutation(url, method, body) {
+  await loadCsrf();
+  return fetch(url, {
+    method,
+    cache: "no-store",
+    headers: {
+      "Content-Type": "application/json",
+      [csrf.headerName]: csrf.token,
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+async function loadCsrf() {
+  if (csrf) return csrf;
+  csrf = await fetchJson("/api/security/csrf");
+  attachCsrfToLogout();
+  return csrf;
 }
 
 async function fetchJson(url) {
