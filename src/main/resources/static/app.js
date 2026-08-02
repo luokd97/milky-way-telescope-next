@@ -20,6 +20,7 @@ const FOOD_WARNING_THRESHOLD = 1440;
 const ACTION_QUEUE_COLLAPSED_LIMIT = 5;
 const DEFAULT_SECTION_ORDER = [
   "currentActivity",
+  "tasks",
   "inventoryHighlights",
   "actionQueue",
   "recentAlerts",
@@ -236,6 +237,7 @@ function createCharacterCard() {
         </div>
         <div class="status-stack">
           <span class="status" data-field="character-status"></span>
+          <span data-field="connection-actions"></span>
         </div>
       </header>
       <div data-field="notices"></div>
@@ -251,10 +253,6 @@ function createCharacterCard() {
           </span>
           <span class="section-meta" data-field="queued-count"></span>
         </div>
-        <div class="task-line">
-          <span data-field="task-count"></span>
-          <span data-field="task-overflow"></span>
-        </div>
         <div data-field="drink-slots" hidden></div>
         <div class="battle-block" data-field="battle" hidden>
           <div class="battle-line">
@@ -262,6 +260,17 @@ function createCharacterCard() {
             <span data-field="battle-meta"></span>
           </div>
           <div data-field="battle-slots"></div>
+        </div>
+      </section>
+
+      <section class="card-subpanel task-panel" data-dashboard-section="tasks"
+          data-card-summary="true">
+        <div class="section-heading task-heading">
+          <span>Tasks</span>
+          <div class="task-line">
+            <span data-field="task-count"></span>
+            <span data-field="task-overflow"></span>
+          </div>
         </div>
       </section>
 
@@ -324,10 +333,11 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   if (card.dataset.detailsExpanded !== "true") {
     card.dataset.detailsExpanded = "false";
   }
-  const characterName = character.name || "Waiting for character data";
+  const characterName = character.name || "";
+  const accessibleCharacterName = character.name || `character ${connection.characterId || id}`;
   setElementText(field("character-id"), `#${connection.characterId || id}`);
   setElementText(field("character-name"), characterName);
-  updateCardSummaryState(card, detailsId, characterName);
+  updateCardSummaryState(card, detailsId, accessibleCharacterName);
   const mode = modeLabel(character.gameMode);
   const modeElement = field("character-mode");
   setElementText(modeElement, mode);
@@ -342,6 +352,7 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   const status = characterStatus(connection, dataStatus);
   setElementClass(field("character-status"), `status ${status.className}`);
   setElementText(field("character-status"), status.label);
+  setElementHtml(field("connection-actions"), connectionActionsHtml(connection, id));
   setElementHtml(field("notices"), noticesHtml(connection, id));
 
   const activeQueued = actions.filter(item => item.done !== true && item.current !== true).length;
@@ -521,7 +532,7 @@ function isMobileViewport() {
 function updateTask(card, task) {
   setElementText(
     card.querySelector("[data-field='task-count']"),
-    task ? `Tasks ${formatNumber(task.currentCount)} / ${formatNumber(task.maxCount)}` : "Tasks —",
+    task ? `${formatNumber(task.currentCount)} / ${formatNumber(task.maxCount)}` : "—",
   );
   const overflow = card.querySelector("[data-field='task-overflow']");
   const hasOverflow = task?.overflowAt != null;
@@ -1083,30 +1094,38 @@ function updateSlotChip(chip, slot, index, threshold, options) {
 function createInventoryItem() {
   const root = document.createElement("div");
   root.className = "inventory-item";
+  root.setAttribute("role", "img");
+
+  const iconWrap = document.createElement("span");
+  iconWrap.className = "inventory-item-icon";
 
   const icon = document.createElement("span");
   icon.className = "icon-anchor";
   icon.dataset.role = "icon";
 
-  const copy = document.createElement("span");
-  copy.className = "inventory-item-copy";
-  const label = document.createElement("span");
-  label.dataset.role = "label";
+  const enhancement = document.createElement("span");
+  enhancement.className = "inventory-item-enhancement";
+  enhancement.dataset.role = "enhancement";
+
   const count = document.createElement("strong");
   count.dataset.role = "count";
-  copy.append(label, count);
 
-  root.append(icon, copy);
+  iconWrap.append(icon, enhancement);
+  root.append(iconWrap, count);
   return root;
 }
 
 function updateInventoryItem(root, item) {
   const label = item.label || item.itemHrid || "Unknown item";
   const enhancement = Number(item.enhancementLevel) > 0 ? ` +${item.enhancementLevel}` : "";
-  setElementTitle(root, `${label}${enhancement} × ${formatItemCount(item.count)}`);
+  const count = `×${formatItemCount(item.count)}`;
+  const accessibleLabel = `${label}${enhancement} ${count}`;
+  setElementTitle(root, `${label}${enhancement} ${count}`);
+  root.setAttribute("aria-label", accessibleLabel);
   updateIconAnchor(root.querySelector("[data-role='icon']"), item.itemHrid, "·");
-  setElementText(root.querySelector("[data-role='label']"), `${label}${enhancement}`);
-  setElementText(root.querySelector("[data-role='count']"), formatItemCount(item.count));
+  setElementText(root.querySelector("[data-role='enhancement']"), enhancement.trim());
+  setHidden(root.querySelector("[data-role='enhancement']"), !enhancement);
+  setElementText(root.querySelector("[data-role='count']"), count);
 }
 
 function createActionRow() {
@@ -1259,44 +1278,11 @@ function characterStatus(connection, dataStatus) {
 
 function noticesHtml(connection, characterIdValue) {
   const notices = [];
-  const action = state.connectionActions.get(characterIdValue);
   const actionError = state.connectionActionErrors.get(characterIdValue);
-  const disabled = action ? " disabled" : "";
   if (connection.error) {
     notices.push(`<p class="notice error">${escapeHtml(connection.error)}</p>`);
   }
-  if (connection.status === "yielded") {
-    const resume = connection.resumeAt
-      ? `Resume ${formatResume(connection.resumeAt)}`
-      : "Manual resume required";
-    notices.push(`
-      <div class="notice warning connection-control">
-        <span class="connection-control-copy">${escapeHtml(resume)}</span>
-        <span class="connection-control-actions">
-          <button class="button-secondary" type="button" data-card-action="reconnect"
-              aria-label="Resume Character ${escapeHtml(characterIdValue)} now"
-              ${action === "reconnect" ? 'aria-busy="true"' : ""}${disabled}>
-            ${action === "reconnect" ? "Resuming…" : "Resume now"}
-          </button>
-          <button class="button-secondary" type="button" data-card-action="extend-yield"
-              aria-label="Extend yield for Character ${escapeHtml(characterIdValue)}"
-              ${action === "extend-yield" ? 'aria-busy="true"' : ""}${disabled}>
-            ${action === "extend-yield" ? "Extending…" : "Extend yield"}
-          </button>
-        </span>
-      </div>`);
-  } else if (shouldOfferReconnect(connection)) {
-    notices.push(`
-      <div class="connection-control connection-control-offline">
-        <span class="connection-control-actions">
-          <button class="button-secondary" type="button" data-card-action="reconnect"
-              aria-label="Reconnect Character ${escapeHtml(characterIdValue)}"
-              ${action === "reconnect" ? 'aria-busy="true"' : ""}${disabled}>
-            ${action === "reconnect" ? "Reconnecting…" : "Reconnect"}
-          </button>
-        </span>
-      </div>`);
-  }
+
   if (actionError && (connection.status === "yielded" || shouldOfferReconnect(connection))) {
     notices.push(`
       <p class="notice error connection-action-error" role="alert">
@@ -1304,6 +1290,40 @@ function noticesHtml(connection, characterIdValue) {
       </p>`);
   }
   return notices.join("");
+}
+
+function connectionActionsHtml(connection, characterIdValue) {
+  const action = state.connectionActions.get(characterIdValue);
+  const disabled = action ? " disabled" : "";
+  if (connection.status === "yielded") {
+    const resume = connection.resumeAt
+      ? `Resume ${formatResume(connection.resumeAt)}`
+      : "Manual resume required";
+    return `
+      <span class="status-actions">
+        <span class="status-action-copy">${escapeHtml(resume)}</span>
+        <button class="button-secondary" type="button" data-card-action="reconnect"
+            aria-label="Resume Character ${escapeHtml(characterIdValue)} now"
+            ${action === "reconnect" ? 'aria-busy="true"' : ""}${disabled}>
+          ${action === "reconnect" ? "Resuming…" : "Resume now"}
+        </button>
+        <button class="button-secondary" type="button" data-card-action="extend-yield"
+            aria-label="Extend yield for Character ${escapeHtml(characterIdValue)}"
+            ${action === "extend-yield" ? 'aria-busy="true"' : ""}${disabled}>
+          ${action === "extend-yield" ? "Extending…" : "Extend yield"}
+        </button>
+      </span>`;
+  } else if (shouldOfferReconnect(connection)) {
+    return `
+      <span class="status-actions">
+        <button class="button-secondary" type="button" data-card-action="reconnect"
+            aria-label="Reconnect Character ${escapeHtml(characterIdValue)}"
+            ${action === "reconnect" ? 'aria-busy="true"' : ""}${disabled}>
+          ${action === "reconnect" ? "Reconnecting…" : "Reconnect"}
+        </button>
+      </span>`;
+  }
+  return "";
 }
 
 function shouldOfferReconnect(connection) {

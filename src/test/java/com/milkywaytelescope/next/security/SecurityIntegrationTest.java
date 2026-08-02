@@ -283,6 +283,7 @@ class SecurityIntegrationTest {
                   "sectionOrder": [
                     "inventoryHighlights",
                     "currentActivity",
+                    "tasks",
                     "actionQueue",
                     "recentAlerts"
                   ]
@@ -370,6 +371,7 @@ class SecurityIntegrationTest {
                   "dashboard": {
                     "sectionOrder": [
                       "currentActivity",
+                      "tasks",
                       "inventoryHighlights",
                       "actionQueue",
                       "recentAlerts"
@@ -419,6 +421,7 @@ class SecurityIntegrationTest {
                   "dashboard": {
                     "sectionOrder": [
                       "currentActivity",
+                      "tasks",
                       "inventoryHighlights",
                       "actionQueue",
                       "recentAlerts"

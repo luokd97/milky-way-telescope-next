@@ -44,6 +44,7 @@ complete configuration. A typical file looks like:
   "dashboard": {
     "sectionOrder": [
       "currentActivity",
+      "tasks",
       "inventoryHighlights",
       "actionQueue",
       "recentAlerts"

@@ -31,6 +31,7 @@ class DashboardSettingsStoreTest {
         List<String> customOrder = List.of(
                 DashboardSettings.INVENTORY_HIGHLIGHTS,
                 DashboardSettings.CURRENT_ACTIVITY,
+                DashboardSettings.TASKS,
                 DashboardSettings.RECENT_ALERTS,
                 DashboardSettings.ACTION_QUEUE
         );
@@ -69,6 +70,9 @@ class DashboardSettingsStoreTest {
         DashboardSettingsStore store = new DashboardSettingsStore(configStore);
 
         assertThat(store.current().inventoryWatchTerms()).isEmpty();
+        assertThat(store.current().sectionOrder()).containsExactlyElementsOf(
+                DashboardSettings.DEFAULT_SECTION_ORDER
+        );
     }
 
     @Test
