@@ -721,12 +721,11 @@ async function clearRecentAlerts(card) {
 }
 
 async function postDashboardAction(url) {
-  const csrf = await dashboardCsrf();
-  const response = await fetch(url, {
-    method: "POST",
-    cache: "no-store",
-    headers: { [csrf.headerName]: csrf.token },
-  });
+  let response = await sendDashboardAction(url);
+  if (response.status === 403) {
+    state.csrf = null;
+    response = await sendDashboardAction(url);
+  }
   if (!response.ok) {
     let message = `HTTP ${response.status}`;
     try {
@@ -735,6 +734,15 @@ async function postDashboardAction(url) {
     } catch {}
     throw new Error(message);
   }
+}
+
+async function sendDashboardAction(url) {
+  const csrf = await dashboardCsrf();
+  return fetch(url, {
+    method: "POST",
+    cache: "no-store",
+    headers: { [csrf.headerName]: csrf.token },
+  });
 }
 
 async function dashboardCsrf() {
