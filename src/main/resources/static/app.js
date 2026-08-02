@@ -1352,7 +1352,7 @@ function actionCount(action) {
   if (Number.isFinite(maximum) && maximum > 0) {
     return `${formatNumber(current)} / ${formatNumber(maximum)}`;
   }
-  return Number.isFinite(current) ? formatNumber(current) : "";
+  return Number.isFinite(current) ? `${formatNumber(current)} / ∞` : "∞";
 }
 
 function modeLabel(mode) {
