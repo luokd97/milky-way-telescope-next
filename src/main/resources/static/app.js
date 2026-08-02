@@ -350,8 +350,7 @@ function updateCharacterCard(card, snapshot, id, sectionOrder) {
   setHidden(modeElement, !mode);
 
   const status = characterStatus(connection, dataStatus);
-  setElementClass(field("character-status"), `status ${status.className}`);
-  setElementText(field("character-status"), status.label);
+  updateCharacterStatus(field("character-status"), connection, status);
   setElementHtml(field("connection-actions"), connectionActionsHtml(connection, id));
   setElementHtml(field("notices"), noticesHtml(connection, id));
 
@@ -399,8 +398,7 @@ async function handleCardAction(event) {
     const card = button.closest(".character-card");
     if (!card) return;
 
-    if (button.dataset.cardAction === "reconnect"
-        || button.dataset.cardAction === "extend-yield") {
+    if (button.dataset.cardAction === "reconnect") {
       await runConnectionAction(card, button.dataset.cardAction);
       return;
     }
@@ -436,12 +434,8 @@ async function runConnectionAction(card, action) {
   const snapshot = (state.dashboard?.characters || []).find((candidate, index) =>
     characterId(candidate, index) === characterIdValue);
   const wasYielded = snapshot?.connection?.status === "yielded";
-  const actionDescription = action === "extend-yield"
-    ? "extend yield"
-    : wasYielded ? "resume connection" : "reconnect";
-  const endpoint = action === "extend-yield"
-    ? `/api/admin/connections/${encodeURIComponent(characterIdValue)}/yield/extend`
-    : `/api/admin/connections/${encodeURIComponent(characterIdValue)}/reconnect`;
+  const actionDescription = wasYielded ? "resume connection" : "reconnect";
+  const endpoint = `/api/admin/connections/${encodeURIComponent(characterIdValue)}/reconnect`;
 
   state.connectionActions.set(characterIdValue, action);
   state.connectionActionErrors.delete(characterIdValue);
@@ -1276,6 +1270,26 @@ function characterStatus(connection, dataStatus) {
   };
 }
 
+function updateCharacterStatus(element, connection, status) {
+  setElementClass(element, `status ${status.className}`);
+  if (status.className !== "yielded") {
+    setElementText(element, status.label);
+    setElementTitle(element, "");
+    element.removeAttribute("aria-label");
+    return;
+  }
+
+  const remaining = formatYieldRemaining(connection.resumeAt);
+  setElementHtml(element, remaining
+    ? `${escapeHtml(status.label)}<span class="status-yielded-time" aria-hidden="true">· ${escapeHtml(remaining)}</span>`
+    : escapeHtml(status.label));
+  const accessibleLabel = connection.resumeAt
+    ? `${status.label}, resumes ${formatResume(connection.resumeAt)}`
+    : `${status.label}, manual resume required`;
+  setElementTitle(element, accessibleLabel);
+  element.setAttribute("aria-label", accessibleLabel);
+}
+
 function noticesHtml(connection, characterIdValue) {
   const notices = [];
   const actionError = state.connectionActionErrors.get(characterIdValue);
@@ -1296,21 +1310,12 @@ function connectionActionsHtml(connection, characterIdValue) {
   const action = state.connectionActions.get(characterIdValue);
   const disabled = action ? " disabled" : "";
   if (connection.status === "yielded") {
-    const resume = connection.resumeAt
-      ? `Resume ${formatResume(connection.resumeAt)}`
-      : "Manual resume required";
     return `
       <span class="status-actions">
-        <span class="status-action-copy">${escapeHtml(resume)}</span>
         <button class="button-secondary" type="button" data-card-action="reconnect"
             aria-label="Resume Character ${escapeHtml(characterIdValue)} now"
             ${action === "reconnect" ? 'aria-busy="true"' : ""}${disabled}>
-          ${action === "reconnect" ? "Resuming…" : "Resume now"}
-        </button>
-        <button class="button-secondary" type="button" data-card-action="extend-yield"
-            aria-label="Extend yield for Character ${escapeHtml(characterIdValue)}"
-            ${action === "extend-yield" ? 'aria-busy="true"' : ""}${disabled}>
-          ${action === "extend-yield" ? "Extending…" : "Extend yield"}
+          ${action === "reconnect" ? "Resuming…" : "Resume"}
         </button>
       </span>`;
   } else if (shouldOfferReconnect(connection)) {
@@ -1364,6 +1369,17 @@ function formatResume(value) {
   const hours = Math.floor(minutes / 60);
   const rest = minutes % 60;
   return `in ${hours}h${rest ? ` ${rest}m` : ""}`;
+}
+
+function formatYieldRemaining(value) {
+  if (!value) return "";
+  const milliseconds = new Date(value).getTime() - Date.now();
+  if (!Number.isFinite(milliseconds)) return "";
+  const minutes = Math.max(0, Math.ceil(milliseconds / 60000));
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  const rest = minutes % 60;
+  return `${hours}h${rest ? ` ${rest}m` : ""}`;
 }
 
 function formatRelativeTime(value) {

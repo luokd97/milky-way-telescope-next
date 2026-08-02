@@ -234,8 +234,14 @@ button:disabled {
 .character-alert-count[hidden] { display: none; }
 .status-stack { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 6px; flex-shrink: 0; }
 .status-actions { display: inline-flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 5px; }
-.status-action-copy { color: var(--muted); font-size: 11px; font-weight: 750; white-space: nowrap; }
 .status-actions button { min-height: 28px; padding: 4px 8px; font-size: 11px; white-space: nowrap; }
+.status-yielded-time {
+    color: #f8d992;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: normal;
+    text-transform: none;
+}
 
 .status,
 .battle-state {
