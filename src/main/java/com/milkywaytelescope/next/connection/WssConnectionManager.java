@@ -23,7 +23,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -220,12 +219,14 @@ public class WssConnectionManager {
         private final String characterId;
         private final AtomicReference<ConnectionProfile> profile = new AtomicReference<>();
         private final AtomicReference<WebSocket> socket = new AtomicReference<>();
-        private final AtomicBoolean connecting = new AtomicBoolean();
         private ScheduledFuture<?> pendingReconnect;
         private ScheduledFuture<?> pendingResume;
         private DesiredState desiredState = DesiredState.RUNNING;
         private Instant resumeAt;
         private volatile long generation;
+        private long attemptSequence;
+        private long activeAttemptId;
+        private boolean connecting;
 
         private ManagedConnection(String characterId) {
             this.characterId = characterId;
@@ -233,17 +234,23 @@ public class WssConnectionManager {
 
         private void connect(ConnectionProfile nextProfile) {
             profile.set(nextProfile);
+            CharacterSession session;
+            long connectingGeneration;
+            long connectingAttemptId;
             synchronized (this) {
                 if (desiredState != DesiredState.RUNNING
                         || socket.get() != null
-                        || !connecting.compareAndSet(false, true)) {
+                        || connecting) {
                     return;
                 }
                 cancelPendingReconnect();
+                connecting = true;
+                connectingAttemptId = ++attemptSequence;
+                activeAttemptId = connectingAttemptId;
+                session = registry.getOrCreate(nextProfile);
+                connectingGeneration = session.beginGeneration(nextProfile);
+                generation = connectingGeneration;
             }
-            CharacterSession session = registry.getOrCreate(nextProfile);
-            generation = session.beginGeneration(nextProfile);
-            long connectingGeneration = generation;
 
             WebSocket.Builder builder = httpClient.newWebSocketBuilder()
                     .connectTimeout(CONNECT_TIMEOUT)
@@ -254,25 +261,22 @@ public class WssConnectionManager {
                     .header("Cookie", nextProfile.cookieHeader());
 
             log.info("Connecting character {} to {}", characterId, nextProfile.redactedUrl());
-            builder.buildAsync(nextProfile.uri(), new Listener(this, connectingGeneration))
+            builder.buildAsync(nextProfile.uri(), new Listener(this, connectingGeneration, connectingAttemptId))
                     .whenComplete((webSocket, failure) -> {
-                        connecting.set(false);
+                        if (!finishAttempt(connectingAttemptId, connectingGeneration)) {
+                            closeSuperseded(webSocket);
+                            return;
+                        }
                         ConnectionProfile requestedProfile = profile.get();
                         if (!nextProfile.equals(requestedProfile)) {
-                            if (webSocket != null) {
-                                socket.compareAndSet(webSocket, null);
-                                webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "configuration superseded");
-                            }
+                            closeSuperseded(webSocket);
                             if (requestedProfile != null) {
                                 connect(requestedProfile);
                             }
                             return;
                         }
                         if (!isRunning()) {
-                            if (webSocket != null) {
-                                socket.compareAndSet(webSocket, null);
-                                webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "connection no longer desired");
-                            }
+                            closeSuperseded(webSocket);
                             return;
                         }
                         if (failure != null) {
@@ -280,11 +284,10 @@ public class WssConnectionManager {
                             log.warn("WSS connection failed for character {}", characterId);
                             scheduleReconnect();
                         } else {
-                            if (registerSocket(webSocket, connectingGeneration)) {
+                            if (registerSocket(webSocket, connectingGeneration, connectingAttemptId)) {
                                 // onOpen normally registers first; this also covers provider ordering.
                             } else {
-                                socket.compareAndSet(webSocket, null);
-                                webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "superseded");
+                                closeSuperseded(webSocket);
                             }
                         }
                     });
@@ -303,9 +306,29 @@ public class WssConnectionManager {
         }
 
         private void close(String reason) {
-            WebSocket active = socket.getAndSet(null);
+            WebSocket active;
+            synchronized (this) {
+                activeAttemptId = ++attemptSequence;
+                connecting = false;
+                active = socket.getAndSet(null);
+            }
             if (active != null) {
                 active.sendClose(WebSocket.NORMAL_CLOSURE, reason);
+            }
+        }
+
+        private synchronized boolean finishAttempt(long expectedAttemptId, long expectedGeneration) {
+            if (activeAttemptId != expectedAttemptId || generation != expectedGeneration) {
+                return false;
+            }
+            connecting = false;
+            return true;
+        }
+
+        private void closeSuperseded(WebSocket webSocket) {
+            if (webSocket != null) {
+                socket.compareAndSet(webSocket, null);
+                webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "superseded");
             }
         }
 
@@ -490,29 +513,94 @@ public class WssConnectionManager {
             return desiredState == DesiredState.RUNNING;
         }
 
-        private synchronized boolean registerSocket(WebSocket webSocket, long expectedGeneration) {
-            if (desiredState != DesiredState.RUNNING || generation != expectedGeneration) {
+        private synchronized boolean registerSocket(
+                WebSocket webSocket,
+                long expectedGeneration,
+                long expectedAttemptId
+        ) {
+            if (desiredState != DesiredState.RUNNING
+                    || generation != expectedGeneration
+                    || activeAttemptId != expectedAttemptId) {
                 return false;
             }
             socket.set(webSocket);
             return true;
+        }
+
+        private synchronized boolean isCurrentAttempt(long expectedGeneration, long expectedAttemptId) {
+            return desiredState == DesiredState.RUNNING
+                    && generation == expectedGeneration
+                    && activeAttemptId == expectedAttemptId;
+        }
+
+        private synchronized boolean detachSocket(
+                WebSocket webSocket,
+                long expectedGeneration,
+                long expectedAttemptId
+        ) {
+            if (!isCurrentAttempt(expectedGeneration, expectedAttemptId)
+                    || !socket.compareAndSet(webSocket, null)) {
+                return false;
+            }
+            activeAttemptId = ++attemptSequence;
+            connecting = false;
+            return true;
+        }
+
+        private void handleClosed(
+                WebSocket webSocket,
+                long expectedGeneration,
+                long expectedAttemptId,
+                int statusCode,
+                String reason
+        ) {
+            if (!detachSocket(webSocket, expectedGeneration, expectedAttemptId)) {
+                return;
+            }
+            CharacterSession session = registry.get(characterId);
+            if (session != null) {
+                session.markClosed(expectedGeneration, statusCode, reason);
+            }
+            if (shouldReconnect()) {
+                scheduleReconnect();
+            }
+        }
+
+        private void handleError(
+                WebSocket webSocket,
+                long expectedGeneration,
+                long expectedAttemptId,
+                Throwable error
+        ) {
+            if (!detachSocket(webSocket, expectedGeneration, expectedAttemptId)) {
+                return;
+            }
+            CharacterSession session = registry.get(characterId);
+            if (session != null) {
+                session.markError(expectedGeneration, error);
+            }
+            if (shouldReconnect()) {
+                scheduleReconnect();
+            }
         }
     }
 
     private final class Listener implements WebSocket.Listener {
         private final ManagedConnection connection;
         private final long generation;
+        private final long attemptId;
         private final StringBuilder textBuffer = new StringBuilder();
         private final ByteArrayOutputStream binaryBuffer = new ByteArrayOutputStream();
 
-        private Listener(ManagedConnection connection, long generation) {
+        private Listener(ManagedConnection connection, long generation, long attemptId) {
             this.connection = connection;
             this.generation = generation;
+            this.attemptId = attemptId;
         }
 
         @Override
         public void onOpen(WebSocket webSocket) {
-            if (!connection.registerSocket(webSocket, generation)) {
+            if (!connection.registerSocket(webSocket, generation, attemptId)) {
                 webSocket.sendClose(WebSocket.NORMAL_CLOSURE, "connection no longer desired");
                 return;
             }
@@ -527,11 +615,13 @@ public class WssConnectionManager {
         public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
             textBuffer.append(data);
             if (last) {
-                CharacterSession session = registry.get(connection.characterId);
-                if (session != null) {
-                    var result = session.recordText(generation, textBuffer.toString());
-                    if (result.shouldYield()) {
-                        connection.yieldToRemoteSession(generation, result.reason());
+                if (connection.isCurrentAttempt(generation, attemptId)) {
+                    CharacterSession session = registry.get(connection.characterId);
+                    if (session != null) {
+                        var result = session.recordText(generation, textBuffer.toString());
+                        if (result.shouldYield()) {
+                            connection.yieldToRemoteSession(generation, result.reason());
+                        }
                     }
                 }
                 textBuffer.setLength(0);
@@ -546,9 +636,11 @@ public class WssConnectionManager {
             data.get(chunk);
             binaryBuffer.writeBytes(chunk);
             if (last) {
-                CharacterSession session = registry.get(connection.characterId);
-                if (session != null) {
-                    session.recordBinary(generation, binaryBuffer.toByteArray());
+                if (connection.isCurrentAttempt(generation, attemptId)) {
+                    CharacterSession session = registry.get(connection.characterId);
+                    if (session != null) {
+                        session.recordBinary(generation, binaryBuffer.toByteArray());
+                    }
                 }
                 binaryBuffer.reset();
             }
@@ -558,29 +650,13 @@ public class WssConnectionManager {
 
         @Override
         public CompletionStage<?> onClose(WebSocket webSocket, int statusCode, String reason) {
-            if (connection.socket.compareAndSet(webSocket, null)) {
-                CharacterSession session = registry.get(connection.characterId);
-                if (session != null) {
-                    session.markClosed(generation, statusCode, reason);
-                }
-                if (connection.shouldReconnect()) {
-                    connection.scheduleReconnect();
-                }
-            }
+            connection.handleClosed(webSocket, generation, attemptId, statusCode, reason);
             return null;
         }
 
         @Override
         public void onError(WebSocket webSocket, Throwable error) {
-            if (connection.socket.compareAndSet(webSocket, null)) {
-                CharacterSession session = registry.get(connection.characterId);
-                if (session != null) {
-                    session.markError(generation, error);
-                }
-                if (connection.shouldReconnect()) {
-                    connection.scheduleReconnect();
-                }
-            }
+            connection.handleError(webSocket, generation, attemptId, error);
         }
     }
 

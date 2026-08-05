@@ -136,6 +136,96 @@ class CharacterProjectionTest {
     }
 
     @Test
+    void doesNotExposeActionsFromAnOlderGenerationUntilTheNewBaselineArrives() throws Exception {
+        CharacterProjection projection = new CharacterProjection("7", 50, 12, List.of());
+        projection.apply(1, "init_character_data", objectMapper.readTree("""
+                {
+                  "character": {"id": 7, "name": "Observer"},
+                  "characterActions": [
+                    {"id": 1, "actionHrid": "/actions/foraging/forest", "ordinal": 1, "isDone": false}
+                  ]
+                }
+                """), Instant.parse("2026-07-26T08:00:00Z"), 1);
+
+        assertThat(projection.snapshot(1, "connected").currentAction().label()).isEqualTo("Forest");
+
+        projection.apply(2, "actions_updated", objectMapper.readTree("""
+                {"endCharacterActions": [
+                  {"id": 2, "actionHrid": "/actions/woodcutting/birch", "ordinal": 1, "isDone": false}
+                ]}
+                """), Instant.parse("2026-07-26T08:01:00Z"), 1);
+
+        var stale = projection.snapshot(2, "connected");
+        assertThat(stale.dataStatus()).isEqualTo("stale");
+        assertThat(stale.currentAction()).isNull();
+        assertThat(stale.actionQueue()).isEmpty();
+
+        projection.apply(2, "init_character_data", objectMapper.readTree("""
+                {
+                  "character": {"id": 7, "name": "Observer"},
+                  "characterActions": [
+                    {"id": 2, "actionHrid": "/actions/woodcutting/birch", "ordinal": 1, "isDone": false}
+                  ]
+                }
+                """), Instant.parse("2026-07-26T08:02:00Z"), 2);
+
+        var live = projection.snapshot(2, "connected");
+        assertThat(live.dataStatus()).isEqualTo("live");
+        assertThat(live.currentAction().label()).isEqualTo("Birch");
+        assertThat(live.actionQueue()).hasSize(1);
+    }
+
+    @Test
+    void preservesActionFieldsWhenAnIncrementalUpdateIsPartial() throws Exception {
+        CharacterProjection projection = new CharacterProjection("7", 50, 12, List.of());
+        Instant baselineAt = Instant.parse("2026-07-26T08:00:00Z");
+        projection.apply(1, "init_character_data", objectMapper.readTree("""
+                {
+                  "character": {"id": 7, "name": "Observer"},
+                  "characterActions": [
+                    {"id": 1, "actionHrid": "/actions/foraging/forest", "ordinal": 1, "isDone": true},
+                    {"id": 2, "actionHrid": "/actions/woodcutting/birch", "ordinal": 2, "isDone": false}
+                  ]
+                }
+                """), baselineAt, 1);
+
+        projection.apply(1, "actions_updated", objectMapper.readTree("""
+                {"endCharacterActions": [
+                  {"id": 1, "currentCount": 20}
+                ]}
+                """), Instant.parse("2026-07-26T08:01:00Z"), 2);
+
+        var snapshot = projection.snapshot(1, "connected");
+        assertThat(snapshot.currentAction().label()).isEqualTo("Birch");
+        assertThat(snapshot.actionQueue())
+                .filteredOn(action -> action.ordinal() == 1L)
+                .singleElement()
+                .satisfies(action -> assertThat(action.done()).isTrue());
+        assertThat(snapshot.dataUpdatedAt()).isEqualTo(Instant.parse("2026-07-26T08:01:00Z"));
+    }
+
+    @Test
+    void ignoresInvalidActionUpdatesWithoutAdvancingProjectionFreshness() throws Exception {
+        CharacterProjection projection = new CharacterProjection("7", 50, 12, List.of());
+        Instant baselineAt = Instant.parse("2026-07-26T08:00:00Z");
+        projection.apply(1, "init_character_data", objectMapper.readTree("""
+                {
+                  "character": {"id": 7, "name": "Observer"},
+                  "characterActions": [
+                    {"id": 1, "actionHrid": "/actions/foraging/forest", "ordinal": 1, "isDone": false}
+                  ]
+                }
+                """), baselineAt, 1);
+
+        projection.apply(1, "actions_updated", objectMapper.readTree("{\"type\":\"actions_updated\"}"),
+                Instant.parse("2026-07-26T08:01:00Z"), 2);
+
+        var snapshot = projection.snapshot(1, "connected");
+        assertThat(snapshot.currentAction().label()).isEqualTo("Forest");
+        assertThat(snapshot.dataUpdatedAt()).isEqualTo(baselineAt);
+    }
+
+    @Test
     void clearsRecentEventsWithoutChangingProjectedInventory() throws Exception {
         CharacterProjection projection = new CharacterProjection("7", 50, 12, List.of("tea"));
         projection.apply(1, "init_character_data", objectMapper.readTree("""

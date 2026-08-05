@@ -215,7 +215,13 @@ class CharacterSessionTest {
         long firstGeneration = session.beginGeneration(profile);
         session.markConnected(firstGeneration);
         session.recordText(firstGeneration, """
-                {"type":"init_character_data","character":{"id":7,"name":"First","gameMode":"standard"}}
+                {
+                  "type":"init_character_data",
+                  "character":{"id":7,"name":"First","gameMode":"standard"},
+                  "characterActions":[
+                    {"id":1,"actionHrid":"/actions/foraging/forest","ordinal":1,"isDone":false}
+                  ]
+                }
                 """);
 
         assertThat(session.snapshot(0, false).dataStatus()).isEqualTo("live");
@@ -224,17 +230,26 @@ class CharacterSessionTest {
         var staleSnapshot = session.snapshot(0, false);
         assertThat(staleSnapshot.dataStatus()).isEqualTo("stale");
         assertThat(staleSnapshot.character().name()).isEqualTo("First");
+        assertThat(staleSnapshot.currentAction()).isNull();
+        assertThat(staleSnapshot.actionQueue()).isEmpty();
 
         session.recordText(secondGeneration, "{\"type\":\"items_updated\",\"endCharacterItems\":[]}");
         assertThat(session.snapshot(0, false).character().name()).isEqualTo("First");
 
         session.markConnected(secondGeneration);
         session.recordText(secondGeneration, """
-                {"type":"init_character_data","character":{"id":7,"name":"Second","gameMode":"ironcow"}}
+                {
+                  "type":"init_character_data",
+                  "character":{"id":7,"name":"Second","gameMode":"ironcow"},
+                  "characterActions":[
+                    {"id":2,"actionHrid":"/actions/woodcutting/birch","ordinal":1,"isDone":false}
+                  ]
+                }
                 """);
         var liveSnapshot = session.snapshot(0, false);
         assertThat(liveSnapshot.dataStatus()).isEqualTo("live");
         assertThat(liveSnapshot.character().name()).isEqualTo("Second");
+        assertThat(liveSnapshot.currentAction().label()).isEqualTo("Birch");
 
         session.markClosed(secondGeneration, 1000, "closed");
         assertThat(session.snapshot(0, false).dataStatus()).isEqualTo("stale");

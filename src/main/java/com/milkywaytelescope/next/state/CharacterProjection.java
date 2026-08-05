@@ -1,6 +1,7 @@
 package com.milkywaytelescope.next.state;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.milkywaytelescope.next.state.CharacterSession.ActionDrinkSlotView;
 import com.milkywaytelescope.next.state.CharacterSession.ActionView;
 import com.milkywaytelescope.next.state.CharacterSession.BattleConsumableSlotView;
@@ -98,22 +99,30 @@ final class CharacterProjection {
             return;
         }
 
-        boolean handled = true;
-        switch (type) {
+        boolean updated = switch (type) {
             case "action_completed" -> applyActionCompleted(message, receivedAt, sourceMessageSequence);
             case "actions_updated" -> applyActionsUpdated(message);
             case "items_updated" -> mergeItems(message.get("endCharacterItems"));
-            case "new_battle" -> applyNewBattle(message);
-            case "battle_updated" -> applyBattleUpdated(message);
-            default -> handled = false;
-        }
-        if (handled) {
+            case "new_battle" -> {
+                applyNewBattle(message);
+                yield true;
+            }
+            case "battle_updated" -> {
+                applyBattleUpdated(message);
+                yield true;
+            }
+            default -> false;
+        };
+        if (updated) {
             dataUpdatedAt = receivedAt;
         }
     }
 
     ProjectionSnapshot snapshot(long currentGeneration, String connectionStatus) {
-        List<ActionView> actions = actionViews();
+        boolean live = baselineGeneration != 0
+                && baselineGeneration == currentGeneration
+                && "connected".equals(connectionStatus);
+        List<ActionView> actions = live ? actionViews() : List.of();
         ActionView currentAction = actions.stream()
                 .filter(ActionView::current)
                 .findFirst()
@@ -121,7 +130,7 @@ final class CharacterProjection {
         String dataStatus;
         if (baselineGeneration == 0) {
             dataStatus = "waiting";
-        } else if (baselineGeneration == currentGeneration && "connected".equals(connectionStatus)) {
+        } else if (live) {
             dataStatus = "live";
         } else {
             dataStatus = "stale";
@@ -172,24 +181,27 @@ final class CharacterProjection {
         }
     }
 
-    private void applyActionCompleted(JsonNode message, Instant occurredAt, long sourceMessageSequence) {
+    private boolean applyActionCompleted(JsonNode message, Instant occurredAt, long sourceMessageSequence) {
+        boolean updated = false;
         JsonNode action = message.get("endCharacterAction");
         if (action != null && !action.isNull()) {
-            mergeAction(action);
+            updated = mergeAction(action);
         }
         JsonNode items = message.get("endCharacterItems");
         addLowItemCountEvents(items, occurredAt, sourceMessageSequence);
-        mergeItems(items);
+        return mergeItems(items) || updated;
     }
 
-    private void applyActionsUpdated(JsonNode message) {
+    private boolean applyActionsUpdated(JsonNode message) {
         JsonNode actions = message.get("endCharacterActions");
-        if (actions == null || !actions.isArray()) {
-            return;
+        if (actions == null || !actions.isArray() || actions.isEmpty()) {
+            return false;
         }
+        boolean updated = false;
         for (JsonNode action : actions) {
-            mergeAction(action);
+            updated |= mergeAction(action);
         }
+        return updated;
     }
 
     private void applyNewBattle(JsonNode message) {
@@ -508,14 +520,34 @@ final class CharacterProjection {
         return List.copyOf(views);
     }
 
-    private void mergeAction(JsonNode action) {
+    private boolean mergeAction(JsonNode action) {
+        if (!hasActionIdentity(action)) {
+            return false;
+        }
         for (int i = 0; i < characterActions.size(); i++) {
             if (sameAction(characterActions.get(i), action)) {
-                characterActions.set(i, action.deepCopy());
-                return;
+                JsonNode existing = characterActions.get(i);
+                if (!(existing instanceof ObjectNode existingObject) || !action.isObject()) {
+                    characterActions.set(i, action.deepCopy());
+                    return true;
+                }
+                action.fields().forEachRemaining(field ->
+                        existingObject.set(field.getKey(), field.getValue().deepCopy())
+                );
+                return true;
             }
         }
         characterActions.add(action.deepCopy());
+        return true;
+    }
+
+    private boolean hasActionIdentity(JsonNode action) {
+        if (action == null || !action.isObject()) {
+            return false;
+        }
+        Long id = longValue(action, "id");
+        Long ordinal = longValue(action, "ordinal");
+        return (id != null && id > 0) || ordinal != null;
     }
 
     private boolean sameAction(JsonNode left, JsonNode right) {
@@ -529,13 +561,16 @@ final class CharacterProjection {
         return leftOrdinal != null && leftOrdinal.equals(rightOrdinal);
     }
 
-    private void mergeItems(JsonNode items) {
+    private boolean mergeItems(JsonNode items) {
         if (items == null || !items.isArray()) {
-            return;
+            return false;
         }
+        boolean updated = false;
         for (JsonNode item : items) {
             itemsByKey.put(itemKey(item), item.deepCopy());
+            updated = true;
         }
+        return updated;
     }
 
     private double inventoryCount(String itemHrid, Integer enhancementLevel) {
